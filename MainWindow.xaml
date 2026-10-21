@@ -1,0 +1,72 @@
+<Window x:Class="TestFlow.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TestFlow – Test Runner" Height="640" Width="1200"
+        Background="{StaticResource Bg}" Foreground="{StaticResource Tx}">
+  <Grid>
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+
+    <Border Background="{StaticResource Panel}" Padding="12,8" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+      <WrapPanel VerticalAlignment="Center">
+        <TextBlock Text="⚡ TestFlow" FontSize="18" FontWeight="Bold" Margin="0,0,18,0" VerticalAlignment="Center"/>
+        <Button Content="⬆ Import Excel" Click="Import_Click"/>
+        <Button Content="📋 Template" Click="Template_Click"/>
+        <Button Content="▶ Run All" Background="{StaticResource Ac}" Click="RunAll_Click"/>
+        <Button Content="▶ Run Selected" Click="RunSelected_Click"/>
+        <Button Content="🔀 Open Flow" Click="OpenFlow_Click"/>
+        <Button x:Name="StopBtn" Content="■ Stop" IsEnabled="False" Click="Stop_Click"/>
+        <Button Content="Export Report" Click="Export_Click"/>
+      </WrapPanel>
+    </Border>
+
+    <Border Grid.Row="1" Padding="16,10" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Margin="0,0,24,0"><Run Text="Total: " Foreground="{StaticResource Mu}"/><Run x:Name="TotalRun" FontWeight="Bold"/></TextBlock>
+        <TextBlock Margin="0,0,24,0"><Run Text="Passed: " Foreground="{StaticResource Mu}"/><Run x:Name="PassRun" FontWeight="Bold" Foreground="#22C55E"/></TextBlock>
+        <TextBlock Margin="0,0,24,0"><Run Text="Failed: " Foreground="{StaticResource Mu}"/><Run x:Name="FailRun" FontWeight="Bold" Foreground="#EF4444"/></TextBlock>
+        <TextBlock><Run Text="Pending: " Foreground="{StaticResource Mu}"/><Run x:Name="PendRun" FontWeight="Bold"/></TextBlock>
+      </StackPanel>
+    </Border>
+
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="340"/></Grid.ColumnDefinitions>
+      <DataGrid x:Name="CasesGrid" SelectionMode="Extended">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>
+          <DataGridTextColumn Header="TYPE" Binding="{Binding Icon}" Width="60"/>
+          <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="1.2*"/>
+          <DataGridTextColumn Header="DESCRIPTION" Binding="{Binding Description}" Width="1.5*"/>
+          <DataGridTemplateColumn Header="STATUS" Width="110">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <Border CornerRadius="6" Padding="10,4" HorizontalAlignment="Left">
+                  <Border.Style>
+                    <Style TargetType="Border">
+                      <Setter Property="Background" Value="#64748B"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding Status}" Value="Passed"><Setter Property="Background" Value="#22C55E"/></DataTrigger>
+                        <DataTrigger Binding="{Binding Status}" Value="Failed"><Setter Property="Background" Value="#EF4444"/></DataTrigger>
+                        <DataTrigger Binding="{Binding Status}" Value="Running"><Setter Property="Background" Value="#F59E0B"/></DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Border.Style>
+                  <TextBlock Text="{Binding Status}" Foreground="White" FontWeight="SemiBold"/>
+                </Border>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTextColumn Header="DURATION" Binding="{Binding DurationText}" Width="90"/>
+        </DataGrid.Columns>
+      </DataGrid>
+
+      <Border Grid.Column="1" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0" Padding="16">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <TextBlock Text="TEST DETAIL" Foreground="{StaticResource Mu}" FontSize="11"/>
+            <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Text="{Binding SelectedItem.Details, ElementName=CasesGrid, FallbackValue='Select a test case to view details.', TargetNullValue='Select a test case to view details.'}"/>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+  </Grid>
+</Window>

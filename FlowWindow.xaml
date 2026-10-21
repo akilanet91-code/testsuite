@@ -1,0 +1,68 @@
+<Window x:Class="TestFlow.FlowWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TestFlow – Flow canvas" Height="780" Width="1300"
+        Background="{StaticResource Bg}" Foreground="{StaticResource Tx}">
+  <Grid>
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+
+    <Border Background="{StaticResource Panel}" Padding="12,8" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Text="⚡ TestFlow" FontSize="18" FontWeight="Bold" Margin="0,0,18,0" VerticalAlignment="Center"/>
+        <Button Content="⬆ Import Excel" Click="Import_Click"/>
+        <Button Content="💾 Save flow" Click="Save_Click"/>
+        <Button Content="📂 Load flow" Click="Load_Click"/>
+        <Button Content="▶ Run flow" Background="{StaticResource Ac}" Click="RunFlow_Click"/>
+        <Button x:Name="StopBtn" Content="■ Stop" IsEnabled="False" Click="Stop_Click"/>
+      </StackPanel>
+    </Border>
+
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+
+      <StackPanel Background="{StaticResource Panel}" Margin="0">
+        <TextBlock Text="ADD NODE" Foreground="{StaticResource Mu}" FontSize="11" Margin="12,12,12,6"/>
+        <StackPanel x:Name="Palette" Margin="10,0"/>
+        <TextBlock Foreground="{StaticResource Mu}" FontSize="11" TextWrapping="Wrap" Margin="12,16"
+                   Text="Drag nodes to move. Click a right dot, then another node’s left dot, to connect. Click a node for settings. Right-click for delete / disconnect."/>
+      </StackPanel>
+
+      <Grid Grid.Column="1">
+        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="130"/></Grid.RowDefinitions>
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+          <Canvas x:Name="Surface" Width="2400" Height="1600" Background="Transparent" MouseLeftButtonDown="Surface_Down"/>
+        </ScrollViewer>
+        <ListBox x:Name="LogBox" Grid.Row="1" Background="{StaticResource Panel}" Foreground="{StaticResource Mu}"
+                 BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0"/>
+      </Grid>
+
+      <Border x:Name="Side" Grid.Column="2" Width="330" Visibility="Collapsed" Background="{StaticResource Panel}"
+              BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0">
+        <Grid>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <DockPanel Margin="14">
+            <Button DockPanel.Dock="Right" Content="✕" Margin="0" VerticalAlignment="Top" Click="CloseSide_Click"/>
+            <StackPanel>
+              <TextBlock Text="NODE SETTINGS" Foreground="{StaticResource Mu}" FontSize="11"/>
+              <TextBlock x:Name="SideTitle" FontSize="16" FontWeight="SemiBold"/>
+            </StackPanel>
+          </DockPanel>
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="14,0,14,6">
+            <Button x:Name="TabP" Content="Properties" Click="TabP_Click"/>
+            <Button x:Name="TabA" Content="Advanced" Click="TabA_Click"/>
+          </StackPanel>
+          <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="14,0">
+            <Grid>
+              <StackPanel x:Name="PropsPanel"/>
+              <StackPanel x:Name="AdvPanel" Visibility="Collapsed"/>
+            </Grid>
+          </ScrollViewer>
+          <StackPanel Grid.Row="3" Margin="14">
+            <Button Content="▶ Run this node" Background="{StaticResource Ac}" Margin="0,0,0,8" Click="RunNode_Click"/>
+            <Button Content="🗑 Delete node" Margin="0" Click="DeleteNode_Click"/>
+          </StackPanel>
+        </Grid>
+      </Border>
+    </Grid>
+  </Grid>
+</Window>
