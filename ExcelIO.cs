@@ -1,6 +1,6 @@
+using ClosedXML.Excel;
 using System.IO;
 using System.Reflection;
-using ClosedXML.Excel;
 
 namespace TestFlow;
 
@@ -61,15 +61,19 @@ public static class ExcelIO
     {
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("TestCases");
-        string[] h = { "Id","Name","Description","Type","CtrlMJobName","CtrlMArguments","TimeoutSeconds","ExpectedExitCode","ApiUrl","HttpMethod","RequestBody","RequestHeaders","ExpectedStatusCode","ExpectedResponseContains","ExePath","ExeArguments","FileCheckFolder","FileNamePattern","FileWaitSeconds","SpecFile","Delimiter","HasHeader" };
+        string[] h = { "Id", "Name", "Description", "Type", "CtrlMJobName", "CtrlMArguments", "TimeoutSeconds", "ExpectedExitCode", "ApiUrl", "HttpMethod", "RequestBody", "RequestHeaders", "ExpectedStatusCode", "ExpectedResponseContains", "ExePath", "ExeArguments", "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "SpecFile", "Delimiter", "HasHeader", "HeaderPrefix", "TrailerPrefix", "HeaderDateStart", "HeaderDateLength", "HeaderDateFormat", "ExpectedHeaderDate", "TrailerCountStart", "TrailerCountLength" };
         for (int i = 0; i < h.Length; i++) ws.Cell(1, i + 1).Value = h[i];
         ws.Row(1).Style.Font.Bold = true;
         void R(int r, params (string col, object v)[] vals) { foreach (var (c, v) in vals) ws.Cell(r, Array.IndexOf(h, c) + 1).Value = XLCellValue.FromObject(v); }
-        R(2, ("Id",1),("Name","Run ETL Job"),("Description","Nightly ETL batch"),("Type","CtrlMJob"),("CtrlMJobName","ETL_DAILY_JOB"),("CtrlMArguments","-env PROD"),("TimeoutSeconds",120),("ExpectedExitCode",0));
-        R(3, ("Id",2),("Name","Health API"),("Description","Check service is up"),("Type","ApiCall"),("ApiUrl","https://example.com/health"),("HttpMethod","GET"),("ExpectedStatusCode",200),("TimeoutSeconds",30));
-        R(4, ("Id",3),("Name","Run Report EXE"),("Description","Runs ReportGen.exe"),("Type","ExeRunner"),("ExePath",@"C:\Tools\ReportGen.exe"),("ExeArguments","-date today"),("TimeoutSeconds",60),("ExpectedExitCode",0));
-        R(5, ("Id",4),("Name","Generate & Verify PDF"),("Description","Run then check file"),("Type","ExeWithFileCheck"),("ExePath",@"C:\Tools\PDFExport.exe"),("ExeArguments",@"-out C:\Output"),("FileCheckFolder",@"C:\Output"),("FileNamePattern","report_*.pdf"),("FileWaitSeconds",30),("TimeoutSeconds",90));
-        R(6, ("Id",5),("Name","Verify generated Excel"),("Description","Check output against TestSuiteV2 spec"),("Type","ExcelVerify"),("FileCheckFolder",@"Samples"),("FileNamePattern","Generated_Sample.xlsx"),("SpecFile",@"Samples\TestSuiteV2_Spec.xlsx"),("TimeoutSeconds",60));
+        R(2, ("Id", 1), ("Name", "Run ETL Job"), ("Description", "Nightly ETL batch"), ("Type", "CtrlMJob"), ("CtrlMJobName", "ETL_DAILY_JOB"), ("CtrlMArguments", "-env PROD"), ("TimeoutSeconds", 120), ("ExpectedExitCode", 0));
+        R(3, ("Id", 2), ("Name", "Health API"), ("Description", "Check service is up"), ("Type", "ApiCall"), ("ApiUrl", "https://example.com/health"), ("HttpMethod", "GET"), ("ExpectedStatusCode", 200), ("TimeoutSeconds", 30));
+        R(4, ("Id", 3), ("Name", "Run Report EXE"), ("Description", "Runs ReportGen.exe"), ("Type", "ExeRunner"), ("ExePath", @"C:\Tools\ReportGen.exe"), ("ExeArguments", "-date today"), ("TimeoutSeconds", 60), ("ExpectedExitCode", 0));
+        R(5, ("Id", 4), ("Name", "Generate & Verify PDF"), ("Description", "Run then check file"), ("Type", "ExeWithFileCheck"), ("ExePath", @"C:\Tools\PDFExport.exe"), ("ExeArguments", @"-out C:\Output"), ("FileCheckFolder", @"C:\Output"), ("FileNamePattern", "report_*.pdf"), ("FileWaitSeconds", 30), ("TimeoutSeconds", 90));
+        R(6, ("Id", 5), ("Name", "Verify generated Excel"), ("Description", "Check output against TestSuiteV2 spec"), ("Type", "ExcelVerify"), ("FileCheckFolder", @"Samples"), ("FileNamePattern", "Generated_Sample.xlsx"), ("SpecFile", @"Samples\TestSuiteV2_Spec.xlsx"), ("TimeoutSeconds", 60));
+        R(7, ("Id", 6), ("Name", "Verify header date + trailer count"), ("Description", "Check header has today's date at pos 5 len 8 and trailer count matches data rows"),
+            ("Type", "HeaderTrailerVerify"), ("FileCheckFolder", @"Samples"), ("FileNamePattern", "Generated_HeaderTrailer.txt"), ("FileWaitSeconds", 5),
+            ("HeaderPrefix", "HDR"), ("HeaderDateStart", 5), ("HeaderDateLength", 8), ("HeaderDateFormat", "yyyyMMdd"), ("ExpectedHeaderDate", ""),
+            ("TrailerPrefix", "TRL"), ("TrailerCountStart", 5), ("TrailerCountLength", 6), ("TimeoutSeconds", 30));
         ws.Columns().AdjustToContents();
         wb.SaveAs(path);
     }
