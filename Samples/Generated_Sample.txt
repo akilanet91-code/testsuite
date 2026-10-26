@@ -1,0 +1,6 @@
+Cust Id|FullName|Email|OrderDate|Amount|Currency
+1001|Alice Tan|alice@example.com|2026-10-01|120.50|USD
+1002|Bob Lee|bob@example.com|2026-10-02|75.00|USD
+abc|Carol Wong|carol(at)example.com|2026-10-03|99.99|USD
+1004||dave@example.com|not-a-date|10|EUR
+1005|Eve Lim|eve@example.com|2026-10-05|12x|USD
