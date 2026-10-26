@@ -9,5 +9,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.104.2" />
+    <PackageReference Include="Microsoft.ML" Version="3.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="Samples\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

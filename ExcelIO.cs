@@ -39,11 +39,29 @@ public static class ExcelIO
         return list;
     }
 
+    /// <summary>Reads any sheet as rows of header->value (formatted text). Works while the file is open in Excel.</summary>
+    public static List<Dictionary<string, string>> ReadRows(string path, string? sheet = null)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var wb = new XLWorkbook(fs);
+        var ws = sheet != null && wb.Worksheets.Contains(sheet) ? wb.Worksheet(sheet) : wb.Worksheets.First();
+        var header = ws.FirstRowUsed() ?? throw new InvalidDataException("Sheet is empty.");
+        var cols = header.CellsUsed().ToDictionary(c => c.Address.ColumnNumber, c => c.GetString().Trim());
+        var rows = new List<Dictionary<string, string>>();
+        foreach (var r in ws.RowsUsed().Skip(1))
+        {
+            var d = new Dictionary<string, string>();
+            foreach (var (col, name) in cols) d[name] = r.Cell(col).GetFormattedString().Trim();
+            if (d.Values.Any(v => v.Length > 0)) rows.Add(d);
+        }
+        return rows;
+    }
+
     public static void SaveTemplate(string path)
     {
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("TestCases");
-        string[] h = { "Id","Name","Description","Type","CtrlMJobName","CtrlMArguments","TimeoutSeconds","ExpectedExitCode","ApiUrl","HttpMethod","RequestBody","RequestHeaders","ExpectedStatusCode","ExpectedResponseContains","ExePath","ExeArguments","FileCheckFolder","FileNamePattern","FileWaitSeconds" };
+        string[] h = { "Id","Name","Description","Type","CtrlMJobName","CtrlMArguments","TimeoutSeconds","ExpectedExitCode","ApiUrl","HttpMethod","RequestBody","RequestHeaders","ExpectedStatusCode","ExpectedResponseContains","ExePath","ExeArguments","FileCheckFolder","FileNamePattern","FileWaitSeconds","SpecFile","Delimiter","HasHeader" };
         for (int i = 0; i < h.Length; i++) ws.Cell(1, i + 1).Value = h[i];
         ws.Row(1).Style.Font.Bold = true;
         void R(int r, params (string col, object v)[] vals) { foreach (var (c, v) in vals) ws.Cell(r, Array.IndexOf(h, c) + 1).Value = XLCellValue.FromObject(v); }
@@ -51,6 +69,7 @@ public static class ExcelIO
         R(3, ("Id",2),("Name","Health API"),("Description","Check service is up"),("Type","ApiCall"),("ApiUrl","https://example.com/health"),("HttpMethod","GET"),("ExpectedStatusCode",200),("TimeoutSeconds",30));
         R(4, ("Id",3),("Name","Run Report EXE"),("Description","Runs ReportGen.exe"),("Type","ExeRunner"),("ExePath",@"C:\Tools\ReportGen.exe"),("ExeArguments","-date today"),("TimeoutSeconds",60),("ExpectedExitCode",0));
         R(5, ("Id",4),("Name","Generate & Verify PDF"),("Description","Run then check file"),("Type","ExeWithFileCheck"),("ExePath",@"C:\Tools\PDFExport.exe"),("ExeArguments",@"-out C:\Output"),("FileCheckFolder",@"C:\Output"),("FileNamePattern","report_*.pdf"),("FileWaitSeconds",30),("TimeoutSeconds",90));
+        R(6, ("Id",5),("Name","Verify generated Excel"),("Description","Check output against TestSuiteV2 spec"),("Type","ExcelVerify"),("FileCheckFolder",@"Samples"),("FileNamePattern","Generated_Sample.xlsx"),("SpecFile",@"Samples\TestSuiteV2_Spec.xlsx"),("TimeoutSeconds",60));
         ws.Columns().AdjustToContents();
         wb.SaveAs(path);
     }

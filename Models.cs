@@ -36,6 +36,9 @@ public class TestCase : Observable
     public string FileCheckFolder { get; set; } = "";
     public string FileNamePattern { get; set; } = "";
     public int FileWaitSeconds { get; set; }
+    public string SpecFile { get; set; } = "";
+    public string Delimiter { get; set; } = "";   // blank = auto-detect; any text, or tab/pipe/comma/semicolon/space/colon/tilde/caret
+    public string HasHeader { get; set; } = "";   // blank/Yes = first line is a header; No = use spec column order
 
     string _status = "Pending", _message = ""; long _duration;
     public static event Action? StatusChanged;
@@ -47,7 +50,7 @@ public class TestCase : Observable
     [JsonIgnore] public string Icon => Type.Trim().ToLowerInvariant() switch
     {
         "ctrlmjob" => "⚙", "exerunner" => "▶", "exewithfilecheck" => "📄",
-        "apicall" or "api" or "restapi" => "🌐", "filecheck" => "📄", _ => "•"
+        "apicall" or "api" or "restapi" => "🌐", "filecheck" => "📄", "excelverify" or "fileverify" => "✔", _ => "•"
     };
 
     [JsonIgnore] public string Details
@@ -61,7 +64,7 @@ public class TestCase : Observable
             A("URL", ApiUrl); A("Method", HttpMethod); A("Body", RequestBody); A("Headers", RequestHeaders);
             A("Expected status", ExpectedStatusCode > 0 ? ExpectedStatusCode.ToString() : "");
             A("Expected contains", ExpectedResponseContains);
-            A("Folder", FileCheckFolder); A("Pattern", FileNamePattern);
+            A("Folder", FileCheckFolder); A("Pattern", FileNamePattern); A("Spec file", SpecFile); A("Delimiter", Delimiter); A("Has header", HasHeader);
             A("Timeout (s)", TimeoutSeconds > 0 ? TimeoutSeconds.ToString() : "");
             A("Expected exit code", ExpectedExitCode.ToString());
             if (!string.IsNullOrEmpty(Message)) sb.AppendLine("\nResult: " + Message);
@@ -75,13 +78,15 @@ public class FlowNode
     public int Id { get; set; }
     public string Kind { get; set; } = "CtrlMJob";
     public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    [JsonIgnore] public string LastRun { get; set; } = "";
     public double X { get; set; }
     public double Y { get; set; }
     public Dictionary<string, string> Props { get; set; } = new();
     // Advanced settings
     public int Retry { get; set; } = 0;
     public int RetryDelayMs { get; set; } = 1000;
-    public int TimeoutMs { get; set; } = 30000;
+    public int TimeoutMs { get; set; } = 120000;
     public string RunCondition { get; set; } = "";   // "" | contains "passed" | contains "failed" (refers to previous node)
     public string OnFailure { get; set; } = "Stop flow"; // "Stop flow" | "Continue"
     [JsonIgnore] public string Status { get; set; } = "";
@@ -97,14 +102,51 @@ public static class Kinds
     public static readonly Dictionary<string, (string Title, string Icon, string[] Fields)> All = new()
     {
         ["CtrlMJob"]  = ("Control-M job", "⚙", new[] { "CtrlMJobName", "CtrlMArguments", "ExpectedExitCode" }),
-        ["ExeRunner"] = ("Run EXE", "▶", new[] { "ExePath", "ExeArguments", "ExpectedExitCode" }),
+        ["ExeRunner"] = ("Run EXE", "▶", new[] { "ExePath", "ExeArguments", "ExpectedExitCode", "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
         ["ApiCall"]   = ("REST request", "🌐", new[] { "ApiUrl", "HttpMethod", "RequestBody", "RequestHeaders", "ExpectedStatusCode", "ExpectedResponseContains" }),
         ["FileCheck"] = ("Check file", "📄", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
+        ["ExcelVerify"] = ("Verify file vs spec (xlsx/csv/txt)", "✔", new[] { "FileCheckFolder", "FileNamePattern", "SpecFile", "Delimiter", "HasHeader" }),
         ["TestSuite"] = ("Test suite (Excel)", "📋", Array.Empty<string>()),
     };
+    public static string DefaultDesc(string kind) => kind switch
+    {
+        "CtrlMJob" => "Run a Control-M job and check its exit code",
+        "ExeRunner" => "Launch an executable and check the result",
+        "ApiCall" => "Send request and validate response",
+        "FileCheck" => "Wait for a file to appear in a folder",
+        "ExcelVerify" => "Validate a generated file against the spec",
+        "TestSuite" => "Run the test cases imported from Excel",
+        _ => ""
+    };
+
+    public static string Label(string f) => f switch
+    {
+        "CtrlMJobName" => "Job name", "CtrlMArguments" => "Arguments",
+        "ExePath" => "Executable (.exe)", "ExeArguments" => "Arguments",
+        "ExpectedExitCode" => "Expected exit code",
+        "ApiUrl" => "URL", "HttpMethod" => "Method", "RequestBody" => "Body", "RequestHeaders" => "Headers",
+        "ExpectedStatusCode" => "Expected status code", "ExpectedResponseContains" => "Response contains",
+        "FileCheckFolder" => "Folder", "FileNamePattern" => "File name pattern", "FileWaitSeconds" => "Wait (seconds)",
+        "SpecFile" => "Spec file (.xlsx)", "Delimiter" => "Delimiter (blank = auto-detect)", "HasHeader" => "Has header (Yes / No)",
+        _ => f
+    };
+
+    /// <summary>Groups a node's fields into titled sections for the settings panel.</summary>
+    public static (string, string[])[] Layout(string kind) => kind switch
+    {
+        "CtrlMJob" => new[] { ("JOB", new[] { "CtrlMJobName", "CtrlMArguments" }), ("EXPECTED RESULT", new[] { "ExpectedExitCode" }) },
+        "ExeRunner" => new[] { ("COMMAND LINE", new[] { "ExePath", "ExeArguments" }), ("EXPECTED RESULT", new[] { "ExpectedExitCode" }),
+                               ("OUTPUT FILE CHECK (optional)", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }) },
+        "ApiCall" => new[] { ("REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody" }),
+                             ("EXPECTED RESPONSE", new[] { "ExpectedStatusCode", "ExpectedResponseContains" }) },
+        "FileCheck" => new[] { ("FILE", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }) },
+        "ExcelVerify" => new[] { ("GENERATED FILE", new[] { "FileCheckFolder", "FileNamePattern", "Delimiter", "HasHeader" }), ("SPECIFICATION", new[] { "SpecFile" }) },
+        _ => Array.Empty<(string, string[])>()
+    };
+
     public static string Default(string f) => f switch
     {
-        "ExpectedExitCode" => "0", "ExpectedStatusCode" => "200", "HttpMethod" => "GET", "FileWaitSeconds" => "30", _ => ""
+        "ExpectedExitCode" => "0", "ExpectedStatusCode" => "200", "HttpMethod" => "GET", "FileWaitSeconds" => "30", "HasHeader" => "Yes", _ => ""
     };
 }
 

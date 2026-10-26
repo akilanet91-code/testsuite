@@ -14,6 +14,10 @@
         <Button Content="📂 Load flow" Click="Load_Click"/>
         <Button Content="▶ Run flow" Background="{StaticResource Ac}" Click="RunFlow_Click"/>
         <Button x:Name="StopBtn" Content="■ Stop" IsEnabled="False" Click="Stop_Click"/>
+        <TextBlock x:Name="FlowInfo" Foreground="{StaticResource Mu}" VerticalAlignment="Center" Margin="16,0,12,0"/>
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Padding="10,5" VerticalAlignment="Center">
+          <TextBlock x:Name="ChipTxt" FontSize="12"/>
+        </Border>
       </StackPanel>
     </Border>
 
@@ -58,6 +62,7 @@
             </Grid>
           </ScrollViewer>
           <StackPanel Grid.Row="3" Margin="14">
+            <TextBlock x:Name="LastRunTxt" Foreground="{StaticResource Mu}" FontSize="11" Margin="0,0,0,8"/>
             <Button Content="▶ Run this node" Background="{StaticResource Ac}" Margin="0,0,0,8" Click="RunNode_Click"/>
             <Button Content="🗑 Delete node" Margin="0" Click="DeleteNode_Click"/>
           </StackPanel>

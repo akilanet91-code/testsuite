@@ -11,7 +11,7 @@ namespace TestFlow;
 
 public partial class FlowWindow : Window
 {
-    class NodeView { public Border Box = null!; public TextBlock Title = null!, Name = null!, Sum = null!; }
+    class NodeView { public Border Box = null!; public TextBlock Title = null!, Name = null!, Sum = null!, Desc = null!, Icon = null!, Check = null!; }
 
     FlowDoc doc = new();
     readonly Dictionary<int, NodeView> views = new();
@@ -38,6 +38,7 @@ public partial class FlowWindow : Window
         var c = AddNode("ApiCall", 330, 40);
         doc.Edges.Add(new FlowEdge { From = a.Id, To = c.Id });
         DrawEdges();
+        RefreshAll();
         Log("INFO", "Ready. Click a node to edit it; use Advanced > Import Excel to give that node its own test cases.");
         AppState.CasesImported += OnImported;
         Closed += (_, _) => AppState.CasesImported -= OnImported;
@@ -76,7 +77,7 @@ public partial class FlowWindow : Window
 
     FlowNode AddNode(string kind, double x, double y)
     {
-        var n = new FlowNode { Id = nextId++, Kind = kind, Name = Kinds.All[kind].Title, X = x, Y = y };
+        var n = new FlowNode { Id = nextId++, Kind = kind, Name = Kinds.All[kind].Title, Description = Kinds.DefaultDesc(kind), X = x, Y = y };
         foreach (var f in Kinds.All[kind].Fields) n.Props[f] = Kinds.Default(f);
         doc.Nodes.Add(n); BuildView(n); return n;
     }
@@ -88,19 +89,32 @@ public partial class FlowWindow : Window
         Margin = ha == HorizontalAlignment.Left ? new Thickness(-9, 0, 0, 0) : new Thickness(0, 0, -9, 0)
     };
 
+    const double NodeW = 250, NodeH = 140;
+
     void BuildView(FlowNode n)
     {
         var v = new NodeView
         {
-            Title = new TextBlock { FontSize = 11, Foreground = Res("Mu") },
-            Name = new TextBlock { FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 2, 0, 0) },
-            Sum = new TextBlock { FontSize = 12, Foreground = Res("Mu"), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 8, 0, 0) }
+            Icon = new TextBlock { FontSize = 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Name = new TextBlock { FontSize = 14, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis },
+            Title = new TextBlock { FontSize = 10, Foreground = Res("Mu") },
+            Check = new TextBlock { FontSize = 14, VerticalAlignment = VerticalAlignment.Center },
+            Desc = new TextBlock { FontSize = 11, Foreground = Res("Mu"), TextTrimming = TextTrimming.CharacterEllipsis },
+            Sum = new TextBlock { FontSize = 12, FontWeight = FontWeights.Bold, FontFamily = new FontFamily("Consolas"), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 6, 0, 0) }
         };
-        var stack = new StackPanel { Margin = new Thickness(14, 10, 14, 10) };
-        stack.Children.Add(v.Title); stack.Children.Add(v.Name); stack.Children.Add(v.Sum);
+        var iconBox = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(8), Background = B("#1E2A55"), Child = v.Icon, Margin = new Thickness(0, 0, 10, 0) };
+        var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        titles.Children.Add(v.Name); titles.Children.Add(v.Title);
+        var head = new DockPanel { Margin = new Thickness(14, 12, 14, 10) };
+        DockPanel.SetDock(iconBox, Dock.Left); DockPanel.SetDock(v.Check, Dock.Right);
+        head.Children.Add(iconBox); head.Children.Add(v.Check); head.Children.Add(titles);
+        var body = new StackPanel { Margin = new Thickness(14, 10, 14, 10) };
+        body.Children.Add(v.Desc); body.Children.Add(v.Sum);
+        var stack = new StackPanel();
+        stack.Children.Add(head); stack.Children.Add(new Border { Height = 1, Background = Res("Line") }); stack.Children.Add(body);
         var grid = new Grid();
         grid.Children.Add(stack); grid.Children.Add(Port("in", HorizontalAlignment.Left)); grid.Children.Add(Port("out", HorizontalAlignment.Right));
-        v.Box = new Border { Width = 230, Height = 96, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(2), Background = Res("Card"), Child = grid, Cursor = Cursors.Hand };
+        v.Box = new Border { Width = NodeW, Height = NodeH, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(2), Background = Res("Card"), Child = grid, Cursor = Cursors.Hand };
         Panel.SetZIndex(v.Box, 5);
 
         var menu = new ContextMenu();
@@ -119,17 +133,30 @@ public partial class FlowWindow : Window
     void Refresh(FlowNode n)
     {
         var v = views[n.Id]; var k = Kinds.All[n.Kind];
-        v.Title.Text = $"{k.Icon}  {k.Title.ToUpperInvariant()}";
-        v.Name.Text = n.Name;
+        v.Icon.Text = k.Icon; v.Name.Text = n.Name; v.Title.Text = k.Title.ToUpperInvariant();
+        v.Desc.Text = string.IsNullOrWhiteSpace(n.Description) ? Kinds.DefaultDesc(n.Kind) : n.Description;
         v.Sum.Text = n.Cases.Count > 0 ? $"📊 {(n.ExcelFile.Length > 0 ? n.ExcelFile : "cases")} · {n.Cases.Count} rows"
             : n.Props.Values.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? "—";
+        v.Check.Text = n.Status switch { "passed" => "✅", "failed" => "❌", "running" => "⏳", _ => "" };
         v.Box.BorderBrush = n.Status switch
         {
             "passed" => B("#22C55E"), "failed" => B("#EF4444"), "running" => B("#F59E0B"),
             _ => linkFrom == n ? B("#F59E0B") : sel == n ? Res("Ac") : Res("Line")
         };
+        if (sel == n) LastRunTxt.Text = n.LastRun.Length == 0 ? "🕒 Last run: not run yet" : "🕒 Last run: " + n.LastRun;
     }
-    void RefreshAll() { foreach (var n in doc.Nodes) Refresh(n); }
+    void RefreshAll() { foreach (var n in doc.Nodes) Refresh(n); UpdateChip(); }
+
+    void UpdateChip()
+    {
+        FlowInfo.Text = $"{doc.Nodes.Count} nodes";
+        if (sel != null && sel.Cases.Count > 0) ChipTxt.Text = $"📊 {sel.ExcelFile} · {sel.Cases.Count} rows";
+        else
+        {
+            int c = doc.Nodes.Count(x => x.Cases.Count > 0);
+            ChipTxt.Text = c == 0 ? "📊 No Excel imported" : $"📊 {c} node(s) with Excel";
+        }
+    }
 
     void NodeDown(FlowNode n, MouseButtonEventArgs e)
     {
@@ -171,7 +198,7 @@ public partial class FlowWindow : Window
         {
             var a = doc.Nodes.FirstOrDefault(n => n.Id == ed.From); var b = doc.Nodes.FirstOrDefault(n => n.Id == ed.To);
             if (a == null || b == null) continue;
-            Point p1 = new(a.X + 230, a.Y + 48), p2 = new(b.X, b.Y + 48);
+            Point p1 = new(a.X + NodeW, a.Y + NodeH / 2), p2 = new(b.X, b.Y + NodeH / 2);
             double dx = Math.Max(50, Math.Abs(p2.X - p1.X) / 2);
             var f = new PathFigure { StartPoint = p1 };
             f.Segments.Add(new BezierSegment(new Point(p1.X + dx, p1.Y), new Point(p2.X - dx, p2.Y), p2, true));
@@ -196,34 +223,55 @@ public partial class FlowWindow : Window
     void TabP_Click(object s, RoutedEventArgs e) { PropsPanel.Visibility = Visibility.Visible; AdvPanel.Visibility = Visibility.Collapsed; }
     void TabA_Click(object s, RoutedEventArgs e) { PropsPanel.Visibility = Visibility.Collapsed; AdvPanel.Visibility = Visibility.Visible; }
 
-    void AddField(Panel p, string label, string val, Action<string> set)
+    void AddField(Panel p, string label, string val, Action<string> set, bool multi = false)
     {
         p.Children.Add(new TextBlock { Text = label, Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
         var tb = new TextBox { Text = val };
+        if (multi) { tb.AcceptsReturn = true; tb.TextWrapping = TextWrapping.Wrap; tb.MinHeight = 64; tb.VerticalScrollBarVisibility = ScrollBarVisibility.Auto; }
         tb.TextChanged += (_, _) => set(tb.Text);
         p.Children.Add(tb);
     }
 
+    void Section(Panel p, string title) =>
+        p.Children.Add(new TextBlock { Text = title, Foreground = Res("Mu"), FontSize = 11, Margin = new Thickness(0, 18, 0, 0) });
+
     void BuildSide(FlowNode n)
     {
         SideTitle.Text = n.Name; PropsPanel.Children.Clear(); AdvPanel.Children.Clear();
+        var k = Kinds.All[n.Kind];
+
+        // action type card
+        var card = new Border { CornerRadius = new CornerRadius(10), BorderBrush = Res("Line"), BorderThickness = new Thickness(1), Background = Res("Card"), Padding = new Thickness(12), Margin = new Thickness(0, 4, 0, 0) };
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(new TextBlock { Text = k.Icon, FontSize = 20, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center });
+        var col = new StackPanel();
+        col.Children.Add(new TextBlock { Text = "Action type", Foreground = Res("Mu"), FontSize = 11 });
+        col.Children.Add(new TextBlock { Text = k.Title.ToUpperInvariant(), FontWeight = FontWeights.SemiBold });
+        row.Children.Add(col); card.Child = row; PropsPanel.Children.Add(card);
+
         AddField(PropsPanel, "Node name", n.Name, t => { n.Name = t; SideTitle.Text = t; Refresh(n); });
-        foreach (var f in Kinds.All[n.Kind].Fields)
-            AddField(PropsPanel, f, n.Props.GetValueOrDefault(f, ""), t => { n.Props[f] = t; Refresh(n); });
+        AddField(PropsPanel, "Description", n.Description, t => { n.Description = t; Refresh(n); }, multi: true);
+        foreach (var (title, fields) in Kinds.Layout(n.Kind))
+        {
+            Section(PropsPanel, title);
+            foreach (var f in fields)
+                AddField(PropsPanel, Kinds.Label(f), n.Props.GetValueOrDefault(f, ""), t => { n.Props[f] = t; Refresh(n); });
+        }
         if (n.Kind == "TestSuite")
             PropsPanel.Children.Add(new TextBlock { Text = "Runs this node’s own Excel test cases (Advanced > Import Excel); passes only if all pass.", Foreground = Res("Mu"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });
 
-        AdvPanel.Children.Add(new TextBlock { Text = "EXECUTION", Foreground = Res("Mu"), FontSize = 11, Margin = new Thickness(0, 10, 0, 0) });
+        // advanced
+        Section(AdvPanel, "EXECUTION");
         AddField(AdvPanel, "Retry count", n.Retry.ToString(), t => { if (int.TryParse(t, out var v)) n.Retry = v; });
         AddField(AdvPanel, "Retry delay (ms)", n.RetryDelayMs.ToString(), t => { if (int.TryParse(t, out var v)) n.RetryDelayMs = v; });
         AddField(AdvPanel, "Timeout (ms)", n.TimeoutMs.ToString(), t => { if (int.TryParse(t, out var v)) n.TimeoutMs = v; });
         AddField(AdvPanel, "Run condition (e.g. previous passed / previous failed)", n.RunCondition, t => n.RunCondition = t);
-        AdvPanel.Children.Add(new TextBlock { Text = "ERROR HANDLING", Foreground = Res("Mu"), FontSize = 11, Margin = new Thickness(0, 16, 0, 4) });
-        var cb = new ComboBox { ItemsSource = new[] { "Stop flow", "Continue" }, SelectedItem = n.OnFailure };
-        cb.SelectionChanged += (_, _) => { if (cb.SelectedItem is string s) n.OnFailure = s; };
+        Section(AdvPanel, "ERROR HANDLING");
+        var cb = new ComboBox { ItemsSource = new[] { "Stop flow", "Continue" }, SelectedItem = n.OnFailure, Margin = new Thickness(0, 4, 0, 0) };
+        cb.SelectionChanged += (_, _) => { if (cb.SelectedItem is string s2) n.OnFailure = s2; };
         AdvPanel.Children.Add(cb);
-        AdvPanel.Children.Add(new TextBlock { Text = "TEST CASES (this node only)", Foreground = Res("Mu"), FontSize = 11, Margin = new Thickness(0, 18, 0, 4) });
-        var info = new TextBlock { Foreground = Res("Mu"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6),
+        Section(AdvPanel, "TEST CASES (this node only)");
+        var info = new TextBlock { Foreground = Res("Mu"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 6),
             Text = n.Cases.Count > 0 ? $"{n.ExcelFile} – {n.Cases.Count} rows" : "No Excel imported yet" };
         AdvPanel.Children.Add(info);
         var imp = new Button { Content = "⬆ Import Excel test cases…", Margin = new Thickness(0) };
@@ -318,7 +366,7 @@ public partial class FlowWindow : Window
                 if (!ok && i < attempts) await Task.Delay(n.RetryDelayMs, ct);
             }
         }
-        n.Status = ok ? "passed" : "failed"; Refresh(n);
+        n.Status = ok ? "passed" : "failed"; n.LastRun = $"{n.Status} · {DateTime.Now:HH:mm:ss}"; Refresh(n);
         Log(ok ? "PASS" : "FAIL", $"Node “{n.Name}” {(ok ? "completed successfully" : "failed")}");
         return ok;
     }

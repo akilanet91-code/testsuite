@@ -41,50 +41,54 @@ public static class Runner
                 return (code == tc.ExpectedExitCode, $"Exit code {code} (expected {tc.ExpectedExitCode}). {Short(o)}");
             }
             case "exerunner":
-            {
-                var (code, o) = await RunProcess(tc.ExePath, tc.ExeArguments, ct);
-                return (code == tc.ExpectedExitCode, $"Exit code {code} (expected {tc.ExpectedExitCode}). {Short(o)}");
-            }
             case "exewithfilecheck":
             {
                 var (code, o) = await RunProcess(tc.ExePath, tc.ExeArguments, ct);
                 if (code != tc.ExpectedExitCode) return (false, $"Exit code {code} (expected {tc.ExpectedExitCode}). {Short(o)}");
-                return await CheckFile(tc, ct);
+                if (!string.IsNullOrWhiteSpace(tc.FileCheckFolder))
+                {
+                    var (fok, fmsg) = await CheckFile(tc, ct);
+                    return (fok, $"Exit code {code}. {fmsg}");
+                }
+                return (true, $"Exit code {code}. {Short(o)}");
             }
             case "apicall": case "api": case "restapi": return await CallApi(tc, ct);
             case "filecheck": return await CheckFile(tc, ct);
+            case "excelverify":
+            case "fileverify":
+            {
+                static string Abs(string p) => string.IsNullOrWhiteSpace(p) || Path.IsPathRooted(p) ? p : Path.Combine(AppContext.BaseDirectory, p);
+                var folder = Abs(tc.FileCheckFolder); var spec = Abs(tc.SpecFile);
+                var pat = string.IsNullOrWhiteSpace(tc.FileNamePattern) ? "*" : tc.FileNamePattern;
+                if (!File.Exists(spec)) return (false, "Spec file not found: " + spec);
+                var file = Directory.Exists(folder)
+                    ? Directory.EnumerateFiles(folder, pat).OrderByDescending(f => File.GetLastWriteTime(f)).FirstOrDefault() : null;
+                if (file == null) return (false, $"Generated file not found: {pat} in {folder}");
+                var issues = await Task.Run(() => SpecVerifier.Verify(spec, file, "Mapping", tc.Delimiter, !(tc.HasHeader.Trim().ToLowerInvariant() is "no" or "n" or "false" or "0")), ct);
+                return (issues.Count == 0,
+                    issues.Count == 0 ? $"{Path.GetFileName(file)} matches the spec"
+                    : $"{issues.Count} issue(s): " + string.Join("; ", issues.Take(10).Select(i => $"{i.Where}: {i.Message}")));
+            }
             default: return (false, "Unknown test type: " + tc.Type);
         }
     }
 
     static string Short(string s) { s = s.Trim(); return s.Length > 300 ? s[..300] + "…" : s; }
 
-    static async Task<(int code, string output)> RunProcess(string file, string args, CancellationToken ct, string? workDir = null)
+    static async Task<(int code, string output)> RunProcess(string file, string args, CancellationToken ct)
     {
-        if (Path.IsPathRooted(file) && !File.Exists(file))
-            throw new FileNotFoundException("Exe not found: " + file);
-
-        // same folder you were in when it worked in cmd; default = exe folder
-        var dir = !string.IsNullOrWhiteSpace(workDir) ? workDir
-                : Path.IsPathRooted(file) ? (Path.GetDirectoryName(file) ?? "") : "";
-
-        var psi = new ProcessStartInfo("cmd.exe", $"/c \"\"{file}\" {args}\"")   // exactly like typing it in cmd
+        if (Path.IsPathRooted(file) && !File.Exists(file)) throw new FileNotFoundException("Exe not found: " + file);
+        // Run from the exe's own folder so relative output paths behave as they do when double-clicked.
+        var psi = new ProcessStartInfo(file, args)
         {
-            WorkingDirectory = dir,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
+            RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
+            WorkingDirectory = Path.IsPathRooted(file) ? (Path.GetDirectoryName(file) ?? "") : ""
         };
-
         using var p = Process.Start(psi) ?? throw new InvalidOperationException("Could not start " + file);
-        p.StandardInput.Close();                       // exe gets end-of-input instead of an invalid handle
         var so = p.StandardOutput.ReadToEndAsync(); var se = p.StandardError.ReadToEndAsync();
         try { await p.WaitForExitAsync(ct); }
         catch (OperationCanceledException) { try { p.Kill(true); } catch { } throw; }
-
-        return (p.ExitCode, $"[cmd /c \"{file}\" {args} | cwd={dir}] " + (await so) + (await se));
+        return (p.ExitCode, (await so) + (await se));
     }
 
     static async Task<(bool, string)> CheckFile(TestCase tc, CancellationToken ct)
