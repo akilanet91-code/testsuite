@@ -36,7 +36,7 @@ public partial class FlowWindow : Window
         }
         var a = AddNode("CtrlMJob", 40, 40);
         var c = AddNode("ApiCall", 330, 40);
-        doc.Edges.Add(new FlowEdge { From = a.Id, To = c.Id });
+        // no default connection: link nodes manually (right dot -> left dot)
         DrawEdges();
         RefreshAll();
         Log("INFO", "Ready. Click a node to edit it; use Advanced > Import Excel to give that node its own test cases.");
@@ -69,9 +69,7 @@ public partial class FlowWindow : Window
     void PaletteAdd(string kind)
     {
         int n = doc.Nodes.Count;
-        var prev = sel ?? doc.Nodes.LastOrDefault();
         var node = AddNode(kind, 40 + (n % 4) * 290, 40 + (n / 4) * 160);
-        if (prev != null) doc.Edges.Add(new FlowEdge { From = prev.Id, To = node.Id });
         DrawEdges(); Select(node);
     }
 
@@ -255,7 +253,7 @@ public partial class FlowWindow : Window
         {
             Section(PropsPanel, title);
             foreach (var f in fields)
-                AddField(PropsPanel, Kinds.Label(f), n.Props.GetValueOrDefault(f, ""), t => { n.Props[f] = t; Refresh(n); });
+                AddField(PropsPanel, Kinds.Label(f), n.Props.GetValueOrDefault(f, ""), t => { n.Props[f] = t; Refresh(n); }, multi: f is "DbQuery" or "DbConnectionString" or "ColumnMap" or "FieldLayout");
         }
         if (n.Kind == "TestSuite")
             PropsPanel.Children.Add(new TextBlock { Text = "Runs this node’s own Excel test cases (Advanced > Import Excel); passes only if all pass.", Foreground = Res("Mu"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });

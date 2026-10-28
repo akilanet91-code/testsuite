@@ -36,67 +36,71 @@ public static class Runner
         switch (tc.Type.Trim().ToLowerInvariant())
         {
             case "ctrlmjob":
-                {
-                    var (code, o) = await RunProcess(CtrlMCommand, $"{tc.CtrlMJobName} {tc.CtrlMArguments}".Trim(), ct);
-                    return (code == tc.ExpectedExitCode, $"Exit code {code} (expected {tc.ExpectedExitCode}). {Short(o)}");
-                }
+            {
+                var (code, o) = await RunProcess(CtrlMCommand, $"{tc.CtrlMJobName} {tc.CtrlMArguments}".Trim(), ct);
+                return (code == tc.ExpectedExitCode, $"Exit code {code} (expected {tc.ExpectedExitCode}). {Short(o)}");
+            }
             case "exerunner":
             case "exewithfilecheck":
+            {
+                var (code, o) = await RunProcess(tc.ExePath, tc.ExeArguments, ct);
+                if (code != tc.ExpectedExitCode) return (false, $"Exit code {code} (expected {tc.ExpectedExitCode}). {Short(o)}");
+                if (!string.IsNullOrWhiteSpace(tc.FileCheckFolder))
                 {
-                    var (code, o) = await RunProcess(tc.ExePath, tc.ExeArguments, ct);
-                    if (code != tc.ExpectedExitCode) return (false, $"Exit code {code} (expected {tc.ExpectedExitCode}). {Short(o)}");
-                    if (!string.IsNullOrWhiteSpace(tc.FileCheckFolder))
-                    {
-                        var (fok, fmsg) = await CheckFile(tc, ct);
-                        return (fok, $"Exit code {code}. {fmsg}");
-                    }
-                    return (true, $"Exit code {code}. {Short(o)}");
+                    var (fok, fmsg) = await CheckFile(tc, ct);
+                    return (fok, $"Exit code {code}. {fmsg}");
                 }
+                return (true, $"Exit code {code}. {Short(o)}");
+            }
             case "apicall": case "api": case "restapi": return await CallApi(tc, ct);
             case "filecheck": return await CheckFile(tc, ct);
+            case "apidbverify": return await ApiDbVerifier.RunAsync(tc, ct);
+            case "fixedfiledbcompare": return await FixedFileDbComparer.RunAsync(tc, ct);
+            case "apidbcompare": return await ApiDbComparer.RunAsync(tc, ct);
+            case "dbexcelcompare": return await DbExcelComparer.RunAsync(tc, ct);
             case "excelverify":
             case "fileverify":
-                {
-                    static string Abs(string p) => string.IsNullOrWhiteSpace(p) || Path.IsPathRooted(p) ? p : Path.Combine(AppContext.BaseDirectory, p);
-                    var folder = Abs(tc.FileCheckFolder); var spec = Abs(tc.SpecFile);
-                    var pat = string.IsNullOrWhiteSpace(tc.FileNamePattern) ? "*" : tc.FileNamePattern;
-                    if (!File.Exists(spec)) return (false, "Spec file not found: " + spec);
-                    var file = Directory.Exists(folder)
-                        ? Directory.EnumerateFiles(folder, pat).OrderByDescending(f => File.GetLastWriteTime(f)).FirstOrDefault() : null;
-                    if (file == null) return (false, $"Generated file not found: {pat} in {folder}");
-                    var issues = await Task.Run(() => SpecVerifier.Verify(spec, file, "Mapping", tc.Delimiter, !(tc.HasHeader.Trim().ToLowerInvariant() is "no" or "n" or "false" or "0")), ct);
-                    return (issues.Count == 0,
-                        issues.Count == 0 ? $"{Path.GetFileName(file)} matches the spec"
-                        : $"{issues.Count} issue(s): " + string.Join("; ", issues.Take(10).Select(i => $"{i.Where}: {i.Message}")));
-                }
+            {
+                static string Abs(string p) => string.IsNullOrWhiteSpace(p) || Path.IsPathRooted(p) ? p : Path.Combine(AppContext.BaseDirectory, p);
+                var folder = Abs(tc.FileCheckFolder); var spec = Abs(tc.SpecFile);
+                var pat = string.IsNullOrWhiteSpace(tc.FileNamePattern) ? "*" : tc.FileNamePattern;
+                if (!File.Exists(spec)) return (false, "Spec file not found: " + spec);
+                var file = Directory.Exists(folder)
+                    ? Directory.EnumerateFiles(folder, pat).OrderByDescending(f => File.GetLastWriteTime(f)).FirstOrDefault() : null;
+                if (file == null) return (false, $"Generated file not found: {pat} in {folder}");
+                var issues = await Task.Run(() => SpecVerifier.Verify(spec, file, "Mapping", tc.Delimiter, !(tc.HasHeader.Trim().ToLowerInvariant() is "no" or "n" or "false" or "0")), ct);
+                return (issues.Count == 0,
+                    issues.Count == 0 ? $"{Path.GetFileName(file)} matches the spec"
+                    : $"{issues.Count} issue(s): " + string.Join("; ", issues.Take(10).Select(i => $"{i.Where}: {i.Message}")));
+            }
             case "headertrailerverify":
+            {
+                static string Abs2(string p) => string.IsNullOrWhiteSpace(p) || Path.IsPathRooted(p) ? p : Path.Combine(AppContext.BaseDirectory, p);
+                var folder2 = Abs2(tc.FileCheckFolder);
+                var pat2    = string.IsNullOrWhiteSpace(tc.FileNamePattern) ? "*" : tc.FileNamePattern;
+
+                // Optionally wait for the file to appear
+                string? file2 = null;
+                var deadline2 = DateTime.UtcNow.AddSeconds(Math.Max(0, tc.FileWaitSeconds));
+                while (true)
                 {
-                    static string Abs2(string p) => string.IsNullOrWhiteSpace(p) || Path.IsPathRooted(p) ? p : Path.Combine(AppContext.BaseDirectory, p);
-                    var folder2 = Abs2(tc.FileCheckFolder);
-                    var pat2 = string.IsNullOrWhiteSpace(tc.FileNamePattern) ? "*" : tc.FileNamePattern;
-
-                    // Optionally wait for the file to appear
-                    string? file2 = null;
-                    var deadline2 = DateTime.UtcNow.AddSeconds(Math.Max(0, tc.FileWaitSeconds));
-                    while (true)
-                    {
-                        if (Directory.Exists(folder2))
-                            file2 = Directory.EnumerateFiles(folder2, pat2)
-                                             .OrderByDescending(f => File.GetLastWriteTime(f))
-                                             .FirstOrDefault();
-                        if (file2 != null) break;
-                        if (DateTime.UtcNow >= deadline2)
-                            return (false, $"Generated file not found: {pat2} in {folder2}");
-                        await Task.Delay(500, ct);
-                    }
-
-                    var opts = HeaderTrailerOptions.FromTestCase(tc);
-                    var issues = await Task.Run(() => HeaderTrailerVerifier.Verify(file2, opts), ct);
-                    return (issues.Count == 0,
-                        issues.Count == 0
-                            ? $"{Path.GetFileName(file2)}: header date ✓  trailer count ✓"
-                            : $"{issues.Count} issue(s): " + string.Join("; ", issues.Take(10).Select(i => $"{i.Where}: {i.Message}")));
+                    if (Directory.Exists(folder2))
+                        file2 = Directory.EnumerateFiles(folder2, pat2)
+                                         .OrderByDescending(f => File.GetLastWriteTime(f))
+                                         .FirstOrDefault();
+                    if (file2 != null) break;
+                    if (DateTime.UtcNow >= deadline2)
+                        return (false, $"Generated file not found: {pat2} in {folder2}");
+                    await Task.Delay(500, ct);
                 }
+
+                var opts   = HeaderTrailerOptions.FromTestCase(tc);
+                var issues = await Task.Run(() => HeaderTrailerVerifier.Verify(file2, opts), ct);
+                return (issues.Count == 0,
+                    issues.Count == 0
+                        ? $"{Path.GetFileName(file2)}: header date ✓  trailer count ✓"
+                        : $"{issues.Count} issue(s): " + string.Join("; ", issues.Take(10).Select(i => $"{i.Where}: {i.Message}")));
+            }
             default: return (false, "Unknown test type: " + tc.Type);
         }
     }
@@ -109,10 +113,7 @@ public static class Runner
         // Run from the exe's own folder so relative output paths behave as they do when double-clicked.
         var psi = new ProcessStartInfo(file, args)
         {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
             WorkingDirectory = Path.IsPathRooted(file) ? (Path.GetDirectoryName(file) ?? "") : ""
         };
         using var p = Process.Start(psi) ?? throw new InvalidOperationException("Could not start " + file);
@@ -138,7 +139,8 @@ public static class Runner
         }
     }
 
-    static async Task<(bool, string)> CallApi(TestCase tc, CancellationToken ct)
+    /// <summary>Sends the request described by the test case and returns status code + body.</summary>
+    internal static async Task<(int status, string body)> SendApi(TestCase tc, CancellationToken ct)
     {
         var method = new HttpMethod(string.IsNullOrWhiteSpace(tc.HttpMethod) ? "GET" : tc.HttpMethod.Trim().ToUpperInvariant());
         using var req = new HttpRequestMessage(method, tc.ApiUrl);
@@ -151,10 +153,15 @@ public static class Runner
             else req.Headers.TryAddWithoutValidation(k, v);
         }
         using var res = await Http.SendAsync(req, ct);
-        var body = await res.Content.ReadAsStringAsync(ct);
+        return ((int)res.StatusCode, await res.Content.ReadAsStringAsync(ct));
+    }
+
+    static async Task<(bool, string)> CallApi(TestCase tc, CancellationToken ct)
+    {
+        var (status, body) = await SendApi(tc, ct);
         int expected = tc.ExpectedStatusCode > 0 ? tc.ExpectedStatusCode : 200;
-        bool okStatus = (int)res.StatusCode == expected;
+        bool okStatus = status == expected;
         bool okBody = string.IsNullOrEmpty(tc.ExpectedResponseContains) || body.Contains(tc.ExpectedResponseContains);
-        return (okStatus && okBody, $"HTTP {(int)res.StatusCode} (expected {expected})" + (okBody ? "" : $"; body missing “{tc.ExpectedResponseContains}”"));
+        return (okStatus && okBody, $"HTTP {status} (expected {expected})" + (okBody ? "" : $"; body missing “{tc.ExpectedResponseContains}”"));
     }
 }

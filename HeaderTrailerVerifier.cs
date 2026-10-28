@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -40,7 +40,7 @@ public static class HeaderTrailerVerifier
             return issues;
         }
 
-        var headerLine = lines[0];
+        var headerLine  = lines[0];
         var trailerLine = lines[^1];
         // Data rows = everything except header (first) and trailer (last)
         int dataRowCount = lines.Count - 2;
@@ -137,11 +137,11 @@ public static class HeaderTrailerVerifier
     static string InferFormat(string s)
     {
         s = s.Trim();
-        if (s.Length == 8 && s.All(char.IsDigit)) return "yyyyMMdd";
-        if (s.Length == 10 && s[4] == '-' && s[7] == '-') return "yyyy-MM-dd";
-        if (s.Length == 10 && s[2] == '/' && s[5] == '/') return "dd/MM/yyyy";
-        if (s.Length == 10 && s[4] == '/' && s[7] == '/') return "yyyy/MM/dd";
-        if (s.Length == 6 && s.All(char.IsDigit)) return "yyyyMM";
+        if (s.Length == 8 && s.All(char.IsDigit))              return "yyyyMMdd";
+        if (s.Length == 10 && s[4] == '-' && s[7] == '-')      return "yyyy-MM-dd";
+        if (s.Length == 10 && s[2] == '/' && s[5] == '/')      return "dd/MM/yyyy";
+        if (s.Length == 10 && s[4] == '/' && s[7] == '/')      return "yyyy/MM/dd";
+        if (s.Length == 6  && s.All(char.IsDigit))              return "yyyyMM";
         return "yyyyMMdd"; // safe fallback
     }
 }
@@ -154,7 +154,7 @@ public class HeaderTrailerOptions
     public string? HeaderPrefix { get; set; }
 
     /// <summary>1-based character position where the date value starts in the header line.</summary>
-    public int HeaderDateStart { get; set; }
+    public int HeaderDateStart  { get; set; }
 
     /// <summary>Number of characters to read for the date value.</summary>
     public int HeaderDateLength { get; set; }
@@ -179,7 +179,7 @@ public class HeaderTrailerOptions
     public string? TrailerPrefix { get; set; }
 
     /// <summary>1-based character position where the record count starts in the trailer line.</summary>
-    public int TrailerCountStart { get; set; }
+    public int TrailerCountStart  { get; set; }
 
     /// <summary>Number of characters to read for the record count.</summary>
     public int TrailerCountLength { get; set; }
@@ -191,12 +191,12 @@ public class HeaderTrailerOptions
     {
         var o = new HeaderTrailerOptions
         {
-            HeaderPrefix = tc.HeaderPrefix,
-            TrailerPrefix = tc.TrailerPrefix,
-            HeaderDateStart = tc.HeaderDateStart,
-            HeaderDateLength = tc.HeaderDateLength,
-            HeaderDateFormat = tc.HeaderDateFormat,
-            TrailerCountStart = tc.TrailerCountStart,
+            HeaderPrefix       = tc.HeaderPrefix,
+            TrailerPrefix      = tc.TrailerPrefix,
+            HeaderDateStart    = tc.HeaderDateStart,
+            HeaderDateLength   = tc.HeaderDateLength,
+            HeaderDateFormat   = tc.HeaderDateFormat,
+            TrailerCountStart  = tc.TrailerCountStart,
             TrailerCountLength = tc.TrailerCountLength,
         };
 

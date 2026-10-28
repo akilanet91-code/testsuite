@@ -40,6 +40,60 @@ public class TestCase : Observable
     public string Delimiter { get; set; } = "";   // blank = auto-detect; any text, or tab/pipe/comma/semicolon/space/colon/tilde/caret
     public string HasHeader { get; set; } = "";   // blank/Yes = first line is a header; No = use spec column order
 
+    // ── ApiDbVerify fields (API value vs database value) ──────────────────────
+    /// <summary>Path to the value in the JSON response, e.g. data.customer.balance or items[0].id</summary>
+    public string ApiJsonPath { get; set; } = "";
+    /// <summary>ADO.NET provider: SqlServer (default) | Oracle | PostgreSql | MySql | Sqlite.</summary>
+    public string DbProvider { get; set; } = "";
+    public string DbConnectionString { get; set; } = "";
+    /// <summary>Query returning the value to compare (first row used). May contain {api:path} placeholders, sent as SQL parameters.</summary>
+    public string DbQuery { get; set; } = "";
+    /// <summary>Result column to compare. Blank = first column.</summary>
+    public string DbColumn { get; set; } = "";
+    /// <summary>Text | TextIgnoreCase | Numeric | Date</summary>
+    public string CompareMode { get; set; } = "";
+    /// <summary>Allowed difference for Numeric compare.</summary>
+    public string Tolerance { get; set; } = "";
+
+    // ── FixedFileDbCompare fields (fixed-position file vs database) ──────────
+    /// <summary>One field per line: DbColumn=start,length[,dec:N][,date:yyyyMMdd]  (start is 1-based). dec:N = N implied decimals.</summary>
+    public string FieldLayout { get; set; } = "";
+    /// <summary>Lines at the top of the file that are not records (header).</summary>
+    public int SkipHeaderLines { get; set; }
+    /// <summary>Lines at the end of the file that are not records (trailer).</summary>
+    public int SkipTrailerLines { get; set; }
+
+    // ── Predefined response data (code / message) ────────────────────────────
+    /// <summary>Where the business response code is in the JSON body, e.g. responseCode or header.code</summary>
+    public string ResponseCodePath { get; set; } = "";
+    /// <summary>The code the response must contain, e.g. 00</summary>
+    public string ExpectedResponseCode { get; set; } = "";
+    /// <summary>Where the response message is in the JSON body. Blank = the whole body is the message.</summary>
+    public string ResponseMessagePath { get; set; } = "";
+    /// <summary>The predefined message the response must have. Blank + ResponseCatalog = looked up by code.</summary>
+    public string ExpectedResponseMessage { get; set; } = "";
+    /// <summary>Equals (default) | EqualsIgnoreCase | Contains</summary>
+    public string MessageMatch { get; set; } = "";
+    /// <summary>Excel file with the predefined messages: columns Code, Message.</summary>
+    public string ResponseCatalog { get; set; } = "";
+    /// <summary>Yes = the DbQuery must return NO rows (error case: nothing may be saved).</summary>
+    public string ExpectNoDbRows { get; set; } = "";
+
+    // ── ApiDbCompare fields (many API fields vs many DB columns; names may differ) ──
+    /// <summary>Where the list of records is in the response, e.g. data.items. Blank = the response itself (a list, or one object).</summary>
+    public string ApiRecordsPath { get; set; } = "";
+    /// <summary>One pair per line: DbColumn=api.path  (e.g. CUST_NM=customer.name). Blank = columns and fields have the same names.</summary>
+    public string ColumnMap { get; set; } = "";
+
+    // ── DbExcelCompare fields (all DB columns vs an Excel file) ──────────────
+    /// <summary>Excel file holding the expected data (first row = column headers matching the query's column names).</summary>
+    public string ExpectedFile { get; set; } = "";
+    public string ExpectedSheet { get; set; } = "";
+    /// <summary>Column that identifies a row (e.g. Id). Blank = compare row 1 with row 1, row 2 with row 2, ...</summary>
+    public string KeyColumn { get; set; } = "";
+    /// <summary>Comma separated columns to skip, e.g. UpdatedAt,CreatedBy</summary>
+    public string IgnoreColumns { get; set; } = "";
+
     // ── HeaderTrailerVerify fields ─────────────────────────────────────────────
     /// <summary>Expected prefix on the first (header) line, e.g. "HDR". Leave blank to skip prefix check.</summary>
     public string HeaderPrefix { get; set; } = "";
@@ -65,21 +119,15 @@ public class TestCase : Observable
     public string Message { get => _message; set { _message = value; Raise(); Raise(nameof(Details)); } }
     [JsonIgnore] public string DurationText => $"{Duration}ms";
 
-    [JsonIgnore]
-    public string Icon => Type.Trim().ToLowerInvariant() switch
+    [JsonIgnore] public string Icon => Type.Trim().ToLowerInvariant() switch
     {
-        "ctrlmjob" => "⚙",
-        "exerunner" => "▶",
-        "exewithfilecheck" => "📄",
-        "apicall" or "api" or "restapi" => "🌐",
-        "filecheck" => "📄",
+        "ctrlmjob" => "⚙", "exerunner" => "▶", "exewithfilecheck" => "📄",
+        "apicall" or "api" or "restapi" => "🌐", "filecheck" => "📄",
         "excelverify" or "fileverify" => "✔",
-        "headertrailerverify" => "🗂",
-        _ => "•"
+        "headertrailerverify" => "🗂", "apidbverify" => "⇄", "dbexcelcompare" => "🗃", "apidbcompare" => "🔀", "fixedfiledbcompare" => "🧾", _ => "•"
     };
 
-    [JsonIgnore]
-    public string Details
+    [JsonIgnore] public string Details
     {
         get
         {
@@ -91,6 +139,9 @@ public class TestCase : Observable
             A("Expected status", ExpectedStatusCode > 0 ? ExpectedStatusCode.ToString() : "");
             A("Expected contains", ExpectedResponseContains);
             A("Folder", FileCheckFolder); A("Pattern", FileNamePattern); A("Spec file", SpecFile); A("Delimiter", Delimiter); A("Has header", HasHeader);
+            A("API path", ApiJsonPath); A("DB provider", DbProvider); A("DB query", DbQuery); A("DB column", DbColumn); A("Compare", CompareMode); A("Tolerance", Tolerance);
+            A("Response code path", ResponseCodePath); A("Expected code", ExpectedResponseCode); A("Response message path", ResponseMessagePath); A("Expected message", ExpectedResponseMessage); A("Message match", MessageMatch); A("Response catalog", ResponseCatalog); A("Expect no DB rows", ExpectNoDbRows);
+            A("Field layout", FieldLayout); A("Skip header lines", SkipHeaderLines > 0 ? SkipHeaderLines.ToString() : ""); A("Skip trailer lines", SkipTrailerLines > 0 ? SkipTrailerLines.ToString() : ""); A("Records path", ApiRecordsPath); A("Column map", ColumnMap); A("Excel file", ExpectedFile); A("Sheet", ExpectedSheet); A("Key column", KeyColumn); A("Ignore columns", IgnoreColumns);
             A("Header prefix", HeaderPrefix); A("Trailer prefix", TrailerPrefix);
             if (HeaderDateStart > 0) A("Header date position", $"start {HeaderDateStart}, length {HeaderDateLength}" + (HeaderDateFormat != "" ? $" ({HeaderDateFormat})" : ""));
             A("Expected header date", ExpectedHeaderDate);
@@ -131,9 +182,9 @@ public static class Kinds
 {
     public static readonly Dictionary<string, (string Title, string Icon, string[] Fields)> All = new()
     {
-        ["CtrlMJob"] = ("Control-M job", "⚙", new[] { "CtrlMJobName", "CtrlMArguments", "ExpectedExitCode" }),
+        ["CtrlMJob"]  = ("Control-M job", "⚙", new[] { "CtrlMJobName", "CtrlMArguments", "ExpectedExitCode" }),
         ["ExeRunner"] = ("Run EXE", "▶", new[] { "ExePath", "ExeArguments", "ExpectedExitCode", "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
-        ["ApiCall"] = ("REST request", "🌐", new[] { "ApiUrl", "HttpMethod", "RequestBody", "RequestHeaders", "ExpectedStatusCode", "ExpectedResponseContains" }),
+        ["ApiCall"]   = ("REST request", "🌐", new[] { "ApiUrl", "HttpMethod", "RequestBody", "RequestHeaders", "ExpectedStatusCode", "ExpectedResponseContains" }),
         ["FileCheck"] = ("Check file", "📄", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
         ["ExcelVerify"] = ("Verify file vs spec (xlsx/csv/txt)", "✔", new[] { "FileCheckFolder", "FileNamePattern", "SpecFile", "Delimiter", "HasHeader" }),
         ["HeaderTrailerVerify"] = ("Verify header date + trailer count", "🗂", new[]
@@ -141,6 +192,26 @@ public static class Kinds
             "FileCheckFolder", "FileNamePattern", "FileWaitSeconds",
             "HeaderPrefix", "HeaderDateStart", "HeaderDateLength", "HeaderDateFormat", "ExpectedHeaderDate",
             "TrailerPrefix", "TrailerCountStart", "TrailerCountLength"
+        }),
+        ["ApiDbVerify"] = ("Compare API value vs database", "⇄", new[]
+        {
+            "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode", "ApiJsonPath",
+            "DbProvider", "DbConnectionString", "DbQuery", "DbColumn", "CompareMode", "Tolerance"
+        }),
+        ["DbExcelCompare"] = ("Compare database rows vs Excel", "🗃", new[]
+        {
+            "DbProvider", "DbConnectionString", "DbQuery", "ExpectedFile", "ExpectedSheet", "KeyColumn", "IgnoreColumns", "CompareMode", "Tolerance"
+        }),
+        ["ApiDbCompare"] = ("Check API response: code, message, database", "🔀", new[]
+        {
+            "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode",
+            "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog", "ExpectedResponseContains",
+            "ApiRecordsPath", "DbProvider", "DbConnectionString", "DbQuery", "ExpectNoDbRows", "ColumnMap", "KeyColumn", "CompareMode", "Tolerance"
+        }),
+        ["FixedFileDbCompare"] = ("Compare fixed-width file vs database", "🧾", new[]
+        {
+            "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "SkipHeaderLines", "SkipTrailerLines", "FieldLayout",
+            "DbProvider", "DbConnectionString", "DbQuery", "KeyColumn", "CompareMode", "Tolerance"
         }),
         ["TestSuite"] = ("Test suite (Excel)", "📋", Array.Empty<string>()),
     };
@@ -152,36 +223,44 @@ public static class Kinds
         "FileCheck" => "Wait for a file to appear in a folder",
         "ExcelVerify" => "Validate a generated file against the spec",
         "HeaderTrailerVerify" => "Check header date and trailer record count",
+        "ApiDbVerify" => "Call an API and cross-check a response value with the database",
+        "DbExcelCompare" => "Compare every column returned by a query with an Excel file",
+        "ApiDbCompare" => "Check status, response code and message against predefined data, and compare the response with the database",
+        "FixedFileDbCompare" => "Check that the DB was updated exactly as the fixed-position file says",
         "TestSuite" => "Run the test cases imported from Excel",
         _ => ""
     };
 
     public static string Label(string f) => f switch
     {
-        "CtrlMJobName" => "Job name",
-        "CtrlMArguments" => "Arguments",
-        "ExePath" => "Executable (.exe)",
-        "ExeArguments" => "Arguments",
+        "CtrlMJobName" => "Job name", "CtrlMArguments" => "Arguments",
+        "ExePath" => "Executable (.exe)", "ExeArguments" => "Arguments",
         "ExpectedExitCode" => "Expected exit code",
-        "ApiUrl" => "URL",
-        "HttpMethod" => "Method",
-        "RequestBody" => "Body",
-        "RequestHeaders" => "Headers",
-        "ExpectedStatusCode" => "Expected status code",
-        "ExpectedResponseContains" => "Response contains",
-        "FileCheckFolder" => "Folder",
-        "FileNamePattern" => "File name pattern",
-        "FileWaitSeconds" => "Wait (seconds)",
-        "SpecFile" => "Spec file (.xlsx)",
-        "Delimiter" => "Delimiter (blank = auto-detect)",
-        "HasHeader" => "Has header (Yes / No)",
-        "HeaderPrefix" => "Header line prefix (e.g. HDR)",
-        "TrailerPrefix" => "Trailer line prefix (e.g. TRL)",
-        "HeaderDateStart" => "Header date — start position (1-based)",
-        "HeaderDateLength" => "Header date — length (chars)",
-        "HeaderDateFormat" => "Header date format (blank = auto, e.g. yyyyMMdd)",
+        "ApiUrl" => "URL", "HttpMethod" => "Method", "RequestBody" => "Body", "RequestHeaders" => "Headers",
+        "ExpectedStatusCode" => "Expected status code", "ExpectedResponseContains" => "Response contains",
+        "FileCheckFolder" => "Folder", "FileNamePattern" => "File name pattern", "FileWaitSeconds" => "Wait (seconds)",
+        "SpecFile" => "Spec file (.xlsx)", "Delimiter" => "Delimiter (blank = auto-detect)", "HasHeader" => "Has header (Yes / No)",
+        "ExpectedFile" => "Excel file with expected data (.xlsx)", "ExpectedSheet" => "Sheet name (blank = first sheet)",
+        "KeyColumn" => "Key column to match rows (blank = by row order)", "IgnoreColumns" => "Columns to ignore (comma separated)",
+        "FieldLayout" => "Field layout: DbColumn=start,length (one per line)",
+        "SkipHeaderLines" => "Header lines to skip", "SkipTrailerLines" => "Trailer lines to skip",
+        "ResponseCodePath" => "Response code path (e.g. responseCode)", "ExpectedResponseCode" => "Expected response code (e.g. 00)",
+        "ResponseMessagePath" => "Response message path (blank = whole body)", "ExpectedResponseMessage" => "Expected message (predefined text)",
+        "MessageMatch" => "Message match (Equals / EqualsIgnoreCase / Contains)", "ResponseCatalog" => "Message catalog (.xlsx with Code, Message)",
+        "ExpectNoDbRows" => "Expect NO database rows (Yes / No)",
+        "ApiRecordsPath" => "Records path in response (blank = whole response)",
+        "ColumnMap" => "Column map: DbColumn=api.path (one per line)",
+        "ApiJsonPath" => "Value in response (e.g. data.balance or items[0].id)",
+        "DbProvider" => "Database type (SqlServer / Oracle / PostgreSql / MySql / Sqlite)", "DbConnectionString" => "Connection string",
+        "DbQuery" => "SQL query (use {api:data.id} to pass an API value)", "DbColumn" => "Result column (blank = first)",
+        "CompareMode" => "Compare as (Text / TextIgnoreCase / Numeric / Date)", "Tolerance" => "Numeric tolerance (e.g. 0.01)",
+        "HeaderPrefix"       => "Header line prefix (e.g. HDR)",
+        "TrailerPrefix"      => "Trailer line prefix (e.g. TRL)",
+        "HeaderDateStart"    => "Header date — start position (1-based)",
+        "HeaderDateLength"   => "Header date — length (chars)",
+        "HeaderDateFormat"   => "Header date format (blank = auto, e.g. yyyyMMdd)",
         "ExpectedHeaderDate" => "Expected header date (blank = today)",
-        "TrailerCountStart" => "Trailer count — start position (1-based)",
+        "TrailerCountStart"  => "Trailer count — start position (1-based)",
         "TrailerCountLength" => "Trailer count — length (chars)",
         _ => f
     };
@@ -202,17 +281,42 @@ public static class Kinds
             ("HEADER RECORD",    new[] { "HeaderPrefix", "HeaderDateStart", "HeaderDateLength", "HeaderDateFormat", "ExpectedHeaderDate" }),
             ("TRAILER RECORD",   new[] { "TrailerPrefix", "TrailerCountStart", "TrailerCountLength" }),
         },
+        "FixedFileDbCompare" => new[]
+        {
+            ("INPUT FILE (FIXED POSITION)", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "SkipHeaderLines", "SkipTrailerLines" }),
+            ("FIELD POSITIONS", new[] { "FieldLayout", "KeyColumn" }),
+            ("DATABASE (AFTER THE APP RAN)", new[] { "DbProvider", "DbConnectionString", "DbQuery" }),
+            ("COMPARE", new[] { "CompareMode", "Tolerance" }),
+        },
+        "ApiDbCompare" => new[]
+        {
+            ("API REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode" }),
+            ("EXPECTED RESPONSE (PREDEFINED DATA)", new[] { "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog", "ExpectedResponseContains" }),
+            ("RECORDS IN RESPONSE", new[] { "ApiRecordsPath" }),
+            ("DATABASE (OPTIONAL)", new[] { "DbProvider", "DbConnectionString", "DbQuery", "ExpectNoDbRows" }),
+            ("COLUMN MAPPING", new[] { "ColumnMap", "KeyColumn" }),
+            ("COMPARE", new[] { "CompareMode", "Tolerance" }),
+        },
+        "DbExcelCompare" => new[]
+        {
+            ("DATABASE", new[] { "DbProvider", "DbConnectionString", "DbQuery" }),
+            ("EXCEL (EXPECTED DATA)", new[] { "ExpectedFile", "ExpectedSheet", "KeyColumn" }),
+            ("COMPARE", new[] { "IgnoreColumns", "CompareMode", "Tolerance" }),
+        },
+        "ApiDbVerify" => new[]
+        {
+            ("API REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode" }),
+            ("VALUE FROM API", new[] { "ApiJsonPath" }),
+            ("DATABASE", new[] { "DbProvider", "DbConnectionString", "DbQuery", "DbColumn" }),
+            ("COMPARE", new[] { "CompareMode", "Tolerance" }),
+        },
         _ => Array.Empty<(string, string[])>()
     };
 
     public static string Default(string f) => f switch
     {
-        "ExpectedExitCode" => "0",
-        "ExpectedStatusCode" => "200",
-        "HttpMethod" => "GET",
-        "FileWaitSeconds" => "30",
-        "HasHeader" => "Yes",
-        _ => ""
+        "ExpectedExitCode" => "0", "ExpectedStatusCode" => "200", "HttpMethod" => "GET", "FileWaitSeconds" => "30", "SkipHeaderLines" => "0", "SkipTrailerLines" => "0", "HasHeader" => "Yes",
+        "DbProvider" => "SqlServer", "CompareMode" => "Text", "Tolerance" => "0", _ => ""
     };
 }
 
