@@ -60,6 +60,16 @@ public class TestCase : Observable
     /// <summary>Lines at the end of the file that are not records (trailer).</summary>
     public int SkipTrailerLines { get; set; }
 
+    // ── Record exists in database (node DbRecordCheck, or pre-check of ApiDbCompare) ──
+    /// <summary>Query that finds the record, e.g. SELECT 1 FROM Customer WHERE CustNo = 'C001'. SELECT COUNT(*) also works.</summary>
+    public string DbCheckQuery { get; set; } = "";
+    /// <summary>Exists (default) | NotExists</summary>
+    public string DbCheckExpect { get; set; } = "";
+    /// <summary>Before (default) | After the API call (After allows {api:path} in the query and in the values).</summary>
+    public string DbCheckWhen { get; set; } = "";
+    /// <summary>Expected column values of the record, one COLUMN=value per line. Special values: {notnull} {null} {today} {any} {api:path}</summary>
+    public string ExpectedValues { get; set; } = "";
+
     // ── Predefined response data (code / message) ────────────────────────────
     /// <summary>Where the business response code is in the JSON body, e.g. responseCode or header.code</summary>
     public string ResponseCodePath { get; set; } = "";
@@ -121,7 +131,7 @@ public class TestCase : Observable
         "ctrlmjob" => "⚙", "exerunner" => "▶", "exewithfilecheck" => "📄",
         "apicall" or "api" or "restapi" => "🌐", "filecheck" => "📄",
         "excelverify" or "fileverify" => "✔",
-        "headertrailerverify" => "🗂", "apidbverify" => "⇄", "dbexcelcompare" => "🗃", "apidbcompare" => "🔀", "fixedfiledbcompare" => "🧾", _ => "•"
+        "headertrailerverify" => "🗂", "apidbverify" => "⇄", "dbexcelcompare" => "🗃", "dbrecordcheck" => "🔎", "apidbcompare" => "🔀", "fixedfiledbcompare" => "🧾", _ => "•"
     };
 
     [JsonIgnore] public string Details
@@ -137,7 +147,7 @@ public class TestCase : Observable
             A("Expected contains", ExpectedResponseContains);
             A("Folder", FileCheckFolder); A("Pattern", FileNamePattern); A("Spec file", SpecFile); A("Delimiter", Delimiter); A("Has header", HasHeader);
             A("API path", ApiJsonPath); A("DB query", DbQuery); A("DB column", DbColumn); A("Compare", CompareMode); A("Tolerance", Tolerance);
-            A("Response code path", ResponseCodePath); A("Expected code", ExpectedResponseCode); A("Response message path", ResponseMessagePath); A("Expected message", ExpectedResponseMessage); A("Message match", MessageMatch); A("Response catalog", ResponseCatalog); A("Expect no DB rows", ExpectNoDbRows);
+            A("DB check query", DbCheckQuery); A("DB check when", DbCheckWhen); A("Expected values", ExpectedValues); A("DB check expects", DbCheckExpect); A("Response code path", ResponseCodePath); A("Expected code", ExpectedResponseCode); A("Response message path", ResponseMessagePath); A("Expected message", ExpectedResponseMessage); A("Message match", MessageMatch); A("Response catalog", ResponseCatalog); A("Expect no DB rows", ExpectNoDbRows);
             A("Field layout", FieldLayout); A("Skip header lines", SkipHeaderLines > 0 ? SkipHeaderLines.ToString() : ""); A("Skip trailer lines", SkipTrailerLines > 0 ? SkipTrailerLines.ToString() : ""); A("Records path", ApiRecordsPath); A("Column map", ColumnMap); A("Excel file", ExpectedFile); A("Sheet", ExpectedSheet); A("Key column", KeyColumn); A("Ignore columns", IgnoreColumns);
             A("Header prefix", HeaderPrefix); A("Trailer prefix", TrailerPrefix);
             if (HeaderDateStart > 0) A("Header date position", $"start {HeaderDateStart}, length {HeaderDateLength}" + (HeaderDateFormat != "" ? $" ({HeaderDateFormat})" : ""));
@@ -199,8 +209,10 @@ public static class Kinds
         {
             "DbQuery", "ExpectedFile", "ExpectedSheet", "KeyColumn", "IgnoreColumns", "CompareMode", "Tolerance"
         }),
+        ["DbRecordCheck"] = ("Check record in database (exists, values)", "🔎", new[] { "DbCheckQuery", "DbCheckExpect", "ExpectedValues", "CompareMode", "Tolerance" }),
         ["ApiDbCompare"] = ("Check API response: code, message, database", "🔀", new[]
         {
+            "DbCheckQuery", "DbCheckExpect", "DbCheckWhen", "ExpectedValues",
             "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode",
             "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog", "ExpectedResponseContains",
             "ApiRecordsPath", "DbQuery", "ExpectNoDbRows", "ColumnMap", "KeyColumn", "CompareMode", "Tolerance"
@@ -222,6 +234,7 @@ public static class Kinds
         "HeaderTrailerVerify" => "Check header date and trailer record count",
         "ApiDbVerify" => "Call an API and cross-check a response value with the database",
         "DbExcelCompare" => "Compare every column returned by a query with an Excel file",
+        "DbRecordCheck" => "Check that a record is in the database (or is not) and holds the expected values from Excel",
         "ApiDbCompare" => "Check status, response code and message against predefined data, and compare the response with the database",
         "FixedFileDbCompare" => "Check that the DB was updated exactly as the fixed-position file says",
         "TestSuite" => "Run the test cases imported from Excel",
@@ -245,6 +258,8 @@ public static class Kinds
         "ResponseMessagePath" => "Response message path (blank = whole body)", "ExpectedResponseMessage" => "Expected message (predefined text)",
         "MessageMatch" => "Message match (Equals / EqualsIgnoreCase / Contains)", "ResponseCatalog" => "Message catalog (.xlsx with Code, Message)",
         "ExpectNoDbRows" => "Expect NO database rows (Yes / No)",
+        "DbCheckQuery" => "Record query (e.g. SELECT 1 FROM T WHERE Id = 'C001')", "DbCheckExpect" => "Record must be: Exists / NotExists", "DbCheckWhen" => "Run the DB check: Before / After the API call",
+        "ExpectedValues" => "Expected values: COLUMN=value (one per line)",
         "ApiRecordsPath" => "Records path in response (blank = whole response)",
         "ColumnMap" => "Column map: DbColumn=api.path (one per line)",
         "ApiJsonPath" => "Value in response (e.g. data.balance or items[0].id)",
@@ -284,8 +299,14 @@ public static class Kinds
             ("DATABASE (AFTER THE APP RAN)", new[] { "DbQuery" }),
             ("COMPARE", new[] { "CompareMode", "Tolerance" }),
         },
+        "DbRecordCheck" => new[]
+        {
+            ("RECORD IN DATABASE", new[] { "DbCheckQuery", "DbCheckExpect" }),
+            ("EXPECTED VALUES (FROM EXCEL)", new[] { "ExpectedValues", "CompareMode", "Tolerance" }),
+        },
         "ApiDbCompare" => new[]
         {
+            ("DATABASE CHECK (RECORD + EXPECTED VALUES)", new[] { "DbCheckQuery", "DbCheckExpect", "DbCheckWhen", "ExpectedValues" }),
             ("API REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode" }),
             ("EXPECTED RESPONSE (PREDEFINED DATA)", new[] { "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog", "ExpectedResponseContains" }),
             ("RECORDS IN RESPONSE", new[] { "ApiRecordsPath" }),
@@ -312,7 +333,7 @@ public static class Kinds
     public static string Default(string f) => f switch
     {
         "ExpectedExitCode" => "0", "ExpectedStatusCode" => "200", "HttpMethod" => "GET", "FileWaitSeconds" => "30", "SkipHeaderLines" => "0", "SkipTrailerLines" => "0", "HasHeader" => "Yes",
-        "CompareMode" => "Text", "Tolerance" => "0", _ => ""
+        "CompareMode" => "Text", "DbCheckExpect" => "Exists", "DbCheckWhen" => "Before", "Tolerance" => "0", _ => ""
     };
 }
 

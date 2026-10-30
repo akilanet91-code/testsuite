@@ -29,9 +29,9 @@ public static class ApiDbVerifier
 
             // 2. Database query. {api:path} placeholders in the query become SQL parameters (safe from injection).
             var args = new List<string?>();
-            string sql = Regex.Replace(tc.DbQuery, @"\{api:([^}]+)\}", m =>
+            string sql = Regex.Replace(tc.DbQuery, @"'\{api:([^}]+)\}'|\{api:([^}]+)\}", m =>
             {
-                if (!TryGetPath(doc.RootElement, m.Groups[1].Value, out var v)) throw new InvalidOperationException($"Query placeholder “{m.Value}” not found in API response");
+                if (!TryGetPath(doc.RootElement, (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value), out var v)) throw new InvalidOperationException($"Query placeholder “{m.Value}” not found in API response");
                 args.Add(v);
                 return Db.Marker(args.Count - 1);
             });
@@ -72,6 +72,9 @@ public static class ApiDbVerifier
     internal static string DbToString(object v) => v switch
     {
         DateTime d => d.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+        DateTimeOffset o => o.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+        bool b => b ? "true" : "false",                 // SQL bit: "true"/"false" like JSON, not "True"/"False"
+        byte[] bytes => Convert.ToHexString(bytes),
         IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
         _ => v.ToString() ?? ""
     };

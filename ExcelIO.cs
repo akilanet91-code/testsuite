@@ -61,7 +61,7 @@ public static class ExcelIO
     {
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("TestCases");
-        string[] h = { "Id","Name","Description","Type","CtrlMJobName","CtrlMArguments","TimeoutSeconds","ExpectedExitCode","ApiUrl","HttpMethod","RequestBody","RequestHeaders","ExpectedStatusCode","ExpectedResponseContains","ExePath","ExeArguments","FileCheckFolder","FileNamePattern","FileWaitSeconds","SpecFile","Delimiter","HasHeader","HeaderPrefix","TrailerPrefix","HeaderDateStart","HeaderDateLength","HeaderDateFormat","ExpectedHeaderDate","TrailerCountStart","TrailerCountLength","ApiJsonPath","DbQuery","DbColumn","CompareMode","Tolerance","ExpectedFile","ExpectedSheet","KeyColumn","IgnoreColumns","ApiRecordsPath","ColumnMap","FieldLayout","SkipHeaderLines","SkipTrailerLines","ResponseCodePath","ExpectedResponseCode","ResponseMessagePath","ExpectedResponseMessage","MessageMatch","ResponseCatalog","ExpectNoDbRows" };
+        string[] h = { "Id","Name","Description","Type","CtrlMJobName","CtrlMArguments","TimeoutSeconds","ExpectedExitCode","ApiUrl","HttpMethod","RequestBody","RequestHeaders","ExpectedStatusCode","ExpectedResponseContains","ExePath","ExeArguments","FileCheckFolder","FileNamePattern","FileWaitSeconds","SpecFile","Delimiter","HasHeader","HeaderPrefix","TrailerPrefix","HeaderDateStart","HeaderDateLength","HeaderDateFormat","ExpectedHeaderDate","TrailerCountStart","TrailerCountLength","ApiJsonPath","DbQuery","DbColumn","CompareMode","Tolerance","ExpectedFile","ExpectedSheet","KeyColumn","IgnoreColumns","ApiRecordsPath","ColumnMap","FieldLayout","SkipHeaderLines","SkipTrailerLines","ResponseCodePath","ExpectedResponseCode","ResponseMessagePath","ExpectedResponseMessage","MessageMatch","ResponseCatalog","ExpectNoDbRows","DbCheckQuery","DbCheckExpect","DbCheckWhen","ExpectedValues" };
         for (int i = 0; i < h.Length; i++) ws.Cell(1, i + 1).Value = h[i];
         ws.Row(1).Style.Font.Bold = true;
         void R(int r, params (string col, object v)[] vals) { foreach (var (c, v) in vals) ws.Cell(r, Array.IndexOf(h, c) + 1).Value = XLCellValue.FromObject(v); }
@@ -93,6 +93,12 @@ public static class ExcelIO
             ("ApiUrl","https://example.com/api/accounts/999"),("HttpMethod","GET"),("ExpectedStatusCode",404),
             ("ResponseCodePath","responseCode"),("ExpectedResponseCode","14"),("ResponseMessagePath","responseMessage"),("ResponseCatalog",@"Samples\ResponseCatalog.xlsx"),
             ("DbQuery","SELECT * FROM ACCOUNT WHERE ACCT_ID = 999"),("ExpectNoDbRows","Yes"),("TimeoutSeconds",30));
+        R(13, ("Id",12),("Name","Customer already in DB"),("Description","Record must exist in the database"),("Type","DbRecordCheck"),
+            ("DbCheckQuery","SELECT 1 FROM CUSTOMER WHERE CUST_NO = 'C001'"),("DbCheckExpect","Exists"),("TimeoutSeconds",30));
+        R(14, ("Id",13),("Name","Inserted customer has expected values"),("Description","The inserted record must hold the values defined here"),("Type","DbRecordCheck"),
+            ("DbCheckQuery","SELECT * FROM CUSTOMER WHERE CUST_NO = 'C001'"),("DbCheckExpect","Exists"),
+            ("ExpectedValues","CUST_NAME=Ann Lee\nBAL_AMT=1500.50\nSTATUS_CD=A\nCREATED_AT={today}\nREMARK={null}"),
+            ("CompareMode","Numeric"),("Tolerance","0.01"),("TimeoutSeconds",30));
         ws.Columns().AdjustToContents();
         wb.SaveAs(path);
     }

@@ -56,6 +56,7 @@ public static class Runner
             case "filecheck": return await CheckFile(tc, ct);
             case "apidbverify": return await ApiDbVerifier.RunAsync(tc, ct);
             case "fixedfiledbcompare": return await FixedFileDbComparer.RunAsync(tc, ct);
+            case "dbrecordcheck": return await DbRecordCheck.RunAsync(tc, ct);
             case "apidbcompare": return await ApiDbComparer.RunAsync(tc, ct);
             case "dbexcelcompare": return await DbExcelComparer.RunAsync(tc, ct);
             case "excelverify":

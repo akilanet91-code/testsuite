@@ -1,0 +1,7 @@
+HDR|20261025|DAILY_EXPORT|BATCH001
+1001|Alice Tan     |alice@example.com       |120.50|USD
+1002|Bob Lee       |bob@example.com         | 75.00|USD
+1003|Carol Wong    |carol@example.com       | 99.99|USD
+1004|Dave Park     |dave@example.com        | 10.00|EUR
+1005|Eve Lim       |eve@example.com         | 12.00|USD
+TRL|000005|END

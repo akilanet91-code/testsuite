@@ -135,3 +135,37 @@ The connection string is not a column in the Excel test cases. All database chec
 - The environment variable `TESTFLOW_DB_CONNECTION` overrides the file, which keeps the password out of it.
 - Old Excel files that still have `DbProvider` or `DbConnectionString` columns still import: those columns are ignored.
 - If no connection string is found, the test fails with a message that names the file to edit.
+
+## Notes on database compare
+- `{api:path}` in `DbQuery` may be written with or without quotes: `WHERE ID = {api:id}` and `WHERE ID = '{api:id}'` both work (the value is always sent as a SQL parameter).
+- SQL `bit` columns are read as `true` / `false`, so they match a JSON boolean (`true`) and a `1` / `0`.
+- `datetimeoffset` is read as `yyyy-MM-dd HH:mm:ss`; `binary` columns as hex text.
+
+## Check that a record is already in the database
+Two ways, both read the SQL Server connection string from `appsettings.json`:
+- **Node / Type `DbRecordCheck`** ("Check record exists in database"): `DbCheckQuery` finds the record, `DbCheckExpect` is `Exists` (default) or `NotExists`.
+  Put it before an API or console-app node to check that the data you need (or a duplicate you want to avoid) is in the database.
+- **Pre-check inside an `ApiDbCompare` case**: fill `DbCheckQuery` / `DbCheckExpect` in the same Excel row. The check runs BEFORE the API call.
+  If it fails, the case fails with "DB pre-check failed, API not called". Typical use: record C001 already exists (`Exists`), then the API must answer "already exists" (`ExpectedResponseCode` / `ExpectedResponseMessage`).
+`DbCheckQuery` examples: `SELECT 1 FROM CUSTOMER WHERE CUST_NO = 'C001'` (a row means the record exists) or `SELECT COUNT(*) FROM CUSTOMER WHERE CUST_NO = 'C001'` (the number is used, 0 means not found).
+Try it: import `Samples\TestCases_RecordExists.xlsx`.
+
+## Validate that a record was inserted, with the values defined in Excel
+`DbRecordCheck` (and the `DbCheck...` columns of an `ApiDbCompare` case) can also compare the record's columns with the expected values written in the Excel row:
+- `DbCheckQuery`: finds the inserted record and returns its columns, e.g. `SELECT * FROM CUSTOMER WHERE CUST_NO = 'C001'`.
+- `DbCheckExpect`: `Exists` (default) or `NotExists`.
+- `ExpectedValues`: one `COLUMN=value` per line (Alt+Enter in the cell), e.g.
+```
+CUST_NAME=Ann Lee
+BAL_AMT=1500.50
+STATUS_CD=A
+CREATED_AT={today}
+REMARK={null}
+ROW_ID={notnull}
+```
+  Special values: `{notnull}` (must have a value), `{null}` (must be NULL or empty), `{today}` (must be today's date), `{any}` (only the column must exist), `{api:path}` (value from the API response).
+  Other values are compared like the other checks: numbers as numbers (`Tolerance`), dates as dates, text exactly (spaces around are ignored).
+- If the query returns several rows, one of them must match every expected value.
+- `DbCheckWhen` (ApiDbCompare only): `Before` (default, record check before the API call) or `After` (after the API call, so the query and the values can use `{api:path}`, e.g. the id returned by the API).
+- Only the columns listed in `ExpectedValues` are checked. A listed column that the query does not return is reported with the names the query did return.
+Try it: import `Samples\TestCases_InsertValidation.xlsx`.

@@ -11,8 +11,18 @@ public static class ApiDbComparer
     public static async Task<(bool ok, string msg)> RunAsync(TestCase tc, CancellationToken ct)
     {
         static string Abs(string p) => string.IsNullOrWhiteSpace(p) || Path.IsPathRooted(p) ? p : Path.Combine(AppContext.BaseDirectory, p);
-        var (status, body) = await Runner.SendApi(tc, ct);
         var issues = new List<string>(); var passed = new List<string>();
+
+        // 0. Pre-check (before the API call): the record must already be in the database (or must not be)
+        bool checkAfter = (tc.DbCheckWhen ?? "").Trim().Equals("After", StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(tc.DbCheckQuery) && !checkAfter)
+        {
+            var (preOk, preMsg) = await DbRecordCheck.RunAsync(tc, ct);
+            if (!preOk) return (false, "DB pre-check failed, API not called: " + preMsg);
+            passed.Add("DB pre-check: " + preMsg);
+        }
+
+        var (status, body) = await Runner.SendApi(tc, ct);
 
         // 1. HTTP status + body text
         int expectedStatus = tc.ExpectedStatusCode > 0 ? tc.ExpectedStatusCode : 200;
@@ -93,6 +103,13 @@ public static class ApiDbComparer
             }
         }
 
+        // 3b. Record check after the API call: the record must be in the database with the values defined in the Excel row
+        if (!string.IsNullOrWhiteSpace(tc.DbCheckQuery) && checkAfter)
+        {
+            var (postOk, postMsg) = await DbRecordCheck.RunAsync(tc, ct, doc);
+            if (postOk) passed.Add("DB check: " + postMsg); else issues.Add("DB check: " + postMsg);
+        }
+
         // 4. Database (optional)
         if (!string.IsNullOrWhiteSpace(tc.DbQuery))
         {
@@ -114,9 +131,9 @@ public static class ApiDbComparer
         var args = new List<string>(); string sql;
         try
         {
-            sql = Regex.Replace(tc.DbQuery, @"\{api:([^}]+)\}", m =>
+            sql = Regex.Replace(tc.DbQuery, @"'\{api:([^}]+)\}'|\{api:([^}]+)\}", m =>
             {
-                if (doc == null || !ApiDbVerifier.TryGetPath(doc.RootElement, m.Groups[1].Value, out var v)) throw new InvalidOperationException($"Query placeholder “{m.Value}” not found in API response");
+                if (doc == null || !ApiDbVerifier.TryGetPath(doc.RootElement, (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value), out var v)) throw new InvalidOperationException($"Query placeholder “{m.Value}” not found in API response");
                 args.Add(v); return Db.Marker(args.Count - 1);
             });
         }
@@ -168,8 +185,11 @@ public static class ApiDbComparer
             map.Add(eq > 0 ? (t[..eq].Trim(), t[(eq + 1)..].Trim()) : (t, t));
         }
         if (map.Count == 0) map = dbCols.Select(c => (c, c)).ToList();
-        foreach (var (dc, _) in map.ToList())
-            if (!dbCols.Contains(dc, StringComparer.OrdinalIgnoreCase)) { issues.Add($"Column “{dc}” is not in the query result"); map.RemoveAll(x => x.db.Equals(dc, StringComparison.OrdinalIgnoreCase)); }
+        // mapped DB columns that the query does not return are reported (with the real column names) and left out
+        var queryColumns = string.Join(", ", dbCols);
+        foreach (var entry in map.Where(pair => !dbCols.Contains(pair.db, StringComparer.OrdinalIgnoreCase)).ToList())
+            issues.Add($"Column “{entry.db}” is not in the query result (query columns: {queryColumns})");
+        map = map.Where(pair => dbCols.Contains(pair.db, StringComparer.OrdinalIgnoreCase)).ToList();
         if (map.Count == 0) { issues.Add("No mapped column is in the query result"); return null; }
 
         var apiRows = recs.Select(r =>

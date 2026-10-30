@@ -137,6 +137,13 @@ public static class DbExcelComparer
         if (m != "text" && m != "textignorecase" && db.Contains('-') && xl.Contains('-') &&
             DateTime.TryParse(db, CultureInfo.InvariantCulture, DateTimeStyles.None, out var da) && DateTime.TryParse(xl, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dx))
             return ((da.TimeOfDay == TimeSpan.Zero || dx.TimeOfDay == TimeSpan.Zero) ? da.Date == dx.Date : da == dx, "date");
+        if (m != "text")
+        {
+            // SQL bit / JSON boolean: "true" = "True" = 1
+            static bool? B(string s, bool digits) { var x = s.Trim().ToLowerInvariant(); return x == "true" ? true : x == "false" ? false : digits && x == "1" ? true : digits && x == "0" ? false : null; }
+            if ((B(db, false) != null && B(xl, true) != null) || (B(xl, false) != null && B(db, true) != null))
+                return (B(db, true) == B(xl, true), "bool");
+        }
         return (string.Equals(db, xl, m is "textignorecase" ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal), "text");
     }
 }
