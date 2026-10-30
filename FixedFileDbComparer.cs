@@ -13,7 +13,7 @@ public static class FixedFileDbComparer
     public static async Task<(bool ok, string msg)> RunAsync(TestCase tc, CancellationToken ct)
     {
         static string Abs(string p) => string.IsNullOrWhiteSpace(p) || Path.IsPathRooted(p) ? p : Path.Combine(AppContext.BaseDirectory, p);
-        if (string.IsNullOrWhiteSpace(tc.DbConnectionString)) return (false, "DbConnectionString is empty");
+        var (dbCs, dbErr) = AppConfig.GetDb(); if (dbErr != null) return (false, dbErr);
         if (string.IsNullOrWhiteSpace(tc.DbQuery)) return (false, "DbQuery is empty");
         var (fields, layoutError) = ParseLayout(tc.FieldLayout);
         if (layoutError != null) return (false, layoutError);
@@ -50,7 +50,7 @@ public static class FixedFileDbComparer
 
         // 3. database rows (after the console app has updated them)
         var dbCols = new List<string>(); var dbRows = new List<Dictionary<string, string>>();
-        await using (var con = ApiDbVerifier.CreateConnection(tc.DbProvider, tc.DbConnectionString))
+        await using (var con = ApiDbVerifier.CreateConnection(dbCs))
         {
             await con.OpenAsync(ct);
             await using var cmd = con.CreateCommand();

@@ -39,7 +39,7 @@ Limit: a quoted value cannot span several lines.
 Node / Type `ApiDbVerify` (palette: "Compare API value vs database"). It calls the API, reads one value from the JSON response,
 runs a SQL query and checks that both values are equal.
 - `ApiJsonPath`: where the value is in the response, e.g. `data.balance` or `items[0].id`.
-- `DbProvider`: the ADO.NET provider: `SqlServer` (default), `Oracle`, `PostgreSql`, `MySql` or `Sqlite`. `DbConnectionString`: connection string for that provider.
+- The database is NOT set in the Excel file or the node: it comes from `appsettings.json` (SQL Server connection string, see "Database configuration" below).
 - `DbQuery`: SQL returning the value (first row used). Use `{api:path}` to pass a value from the response into the query,
   e.g. `SELECT Balance FROM Accounts WHERE AccountId = {api:data.accountId}`. It is sent as a SQL parameter, not pasted into the text.
 - `DbColumn`: column to compare (blank = first column).
@@ -77,19 +77,8 @@ database rows returned by `DbQuery` (run after the app finished).
 - Reported: wrong values (file vs DB), records only in the file, rows only in the DB, lines shorter than the layout.
 Try it: import `Samples\TestCases_FixedFileDb.xlsx` (uses `Samples\Accounts_Input.txt`).
 
-## Database providers (ADO.NET, no ODBC)
-All database nodes use native ADO.NET providers, chosen with `DbProvider`:
-
-| DbProvider | NuGet package | Connection string example |
-|---|---|---|
-| SqlServer (default) | Microsoft.Data.SqlClient | `Server=.;Database=Bank;Integrated Security=true;TrustServerCertificate=true` |
-| Oracle | Oracle.ManagedDataAccess.Core | `User Id=app;Password=pw;Data Source=dbhost:1521/ORCLPDB1` |
-| PostgreSql | Npgsql | `Host=dbhost;Database=bank;Username=app;Password=pw` |
-| MySql | MySqlConnector | `Server=dbhost;Database=bank;User=app;Password=pw` |
-| Sqlite | Microsoft.Data.Sqlite | `Data Source=C:\data\bank.db` |
-
-Parameters from `{api:path}` use `@p0`, `@p1`... (Oracle: `:p0`, `:p1`...) automatically. Remove the packages you do not need from `TestFlow.csproj`
-only together with the matching line in `DbProviders.cs`.
+## Database (SQL Server only)
+All database checks use SQL Server through `Microsoft.Data.SqlClient`. The connection string is in `appsettings.json`. Values from `{api:path}` in a query are sent as SQL parameters (`@p0`, `@p1`, ...) automatically.
 
 ## Check API responses against predefined data (code, message) and the database
 Node / Type `ApiDbCompare` ("Check API response: code, message, database"). One test case = one scenario (success, validation error, not found...), so list every response your API can give.
@@ -103,3 +92,46 @@ Each check only runs when its setting is filled in:
   Error case = set `ExpectNoDbRows` to `Yes`: the query must return no rows (nothing may be saved).
 All results of a case are shown together, e.g. `HTTP 200 | code 00 | message "Success" (catalog) | DB: 3 row(s) vs 3 API record(s), 6 column(s), 3 fully match`.
 Try it: import `Samples\TestCases_ApiResponses.xlsx` (uses `Samples\ResponseCatalog.xlsx`).
+
+## Troubleshooting: "Microsoft.Data.SqlClient is not supported on this platform"
+This happens when the app finds only the reference stub of the SQL client and not the real Windows assembly.
+1. Run the app from the full build folder (`bin\Debug\net8.0-windows\win-x64\` or the publish folder), not from a copy of the .exe alone. The `runtimes` folder next to it must stay.
+2. Rebuild after deleting the `bin` and `obj` folders (`dotnet clean`, then `dotnet run`). The project now sets `RuntimeIdentifier` = `win-x64`, so the build copies the real assembly.
+3. If you publish a single file, use `dotnet publish -r win-x64 --self-contained false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true`.
+4. Run it on Windows. The WPF app (`net8.0-windows`) does not run on Linux or macOS.
+
+## JSON paths (ApiJsonPath, ResponseCodePath, ResponseMessagePath, ApiRecordsPath, ColumnMap, {api:...})
+Property names are not case-sensitive. Example response:
+```json
+{ "status": "ok", "data": { "items": [ { "id": 1, "name": "A", "tags": ["x","y"] }, { "id": 2, "name": "B" } ], "total": 2 } }
+```
+| Path | Result | Meaning |
+|---|---|---|
+| `data.items[0].name` | A | index |
+| `data.items[1].name` | B | index |
+| `data.items[-1].name` | B | last item |
+| `data.items.name` | A | array without index: first item that has the field |
+| `data.items[].name` or `[*]` | A | first item |
+| `items[id=2].name` | B | first item whose `id` is 2 |
+| `data.items.tags[1]` | y | array inside an array item |
+| `name` | A | a bare field name that is not at the top is searched anywhere in the response |
+| `items.name` | A | the first part is searched anywhere, then the rest is followed |
+| `..id` | 1 | always search anywhere |
+| `$.data.total` | 2 | a leading `$.` is allowed |
+A list at the top of the response works the same way: `[0].title`, `title`, `[id=8].title`.
+Exceptions: `ColumnMap` paths are relative to each record and are NOT searched anywhere (a missing field is reported as missing).
+When a path is not found, the message lists the top-level field names to help you fix it.
+
+## Database configuration (appsettings.json)
+The connection string is not a column in the Excel test cases. All database checks read it from `appsettings.json`, which is copied next to the exe:
+```json
+{
+  "Database": {
+    "ConnectionString": "Data Source=localhost;Initial Catalog=Bank;Integrated Security=True;TrustServerCertificate=True"
+  }
+}
+```
+- The file is read on every run, so you can edit it (in the build folder) without restarting the app.
+- The environment variable `TESTFLOW_DB_CONNECTION` overrides the file, which keeps the password out of it.
+- Old Excel files that still have `DbProvider` or `DbConnectionString` columns still import: those columns are ignored.
+- If no connection string is found, the test fails with a message that names the file to edit.

@@ -32,7 +32,7 @@ public static class ApiDbComparer
         if (!string.IsNullOrWhiteSpace(tc.ResponseCodePath))
         {
             if (doc != null && ApiDbVerifier.TryGetPath(doc.RootElement, tc.ResponseCodePath, out var c)) actualCode = c.Trim();
-            else issues.Add($"Response code not found at “{tc.ResponseCodePath}”");
+            else issues.Add($"Response code not found at “{tc.ResponseCodePath}”" + (doc != null ? $" ({ApiDbVerifier.Describe(doc.RootElement)})" : " (response is not JSON)"));
         }
         if (!string.IsNullOrWhiteSpace(tc.ExpectedResponseCode))
         {
@@ -107,7 +107,7 @@ public static class ApiDbComparer
 
     static async Task<string?> CompareDbAsync(TestCase tc, JsonDocument? doc, List<string> issues, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(tc.DbConnectionString)) { issues.Add("DbConnectionString is empty"); return null; }
+        var (dbCs, dbErr) = AppConfig.GetDb(); if (dbErr != null) { issues.Add(dbErr); return null; }
         bool noRows = (tc.ExpectNoDbRows ?? "").Trim().ToLowerInvariant() is "yes" or "y" or "true" or "1";
 
         // {api:path} in the query = value from the response root, sent as a SQL parameter
@@ -117,20 +117,20 @@ public static class ApiDbComparer
             sql = Regex.Replace(tc.DbQuery, @"\{api:([^}]+)\}", m =>
             {
                 if (doc == null || !ApiDbVerifier.TryGetPath(doc.RootElement, m.Groups[1].Value, out var v)) throw new InvalidOperationException($"Query placeholder “{m.Value}” not found in API response");
-                args.Add(v); return Db.Marker(tc.DbProvider, args.Count - 1);
+                args.Add(v); return Db.Marker(args.Count - 1);
             });
         }
         catch (InvalidOperationException ex) { issues.Add(ex.Message); return null; }
 
         var dbCols = new List<string>(); var dbRows = new List<Dictionary<string, string>>();
-        await using (var con = ApiDbVerifier.CreateConnection(tc.DbProvider, tc.DbConnectionString))
+        await using (var con = ApiDbVerifier.CreateConnection(dbCs))
         {
             await con.OpenAsync(ct);
             await using var cmd = con.CreateCommand();
             cmd.CommandText = sql; cmd.CommandTimeout = Math.Max(5, tc.TimeoutSeconds > 0 ? tc.TimeoutSeconds : 60);
             for (int i = 0; i < args.Count; i++)
             {
-                var p = cmd.CreateParameter(); p.ParameterName = Db.ParamName(tc.DbProvider, i); p.Value = args[i]; cmd.Parameters.Add(p);
+                var p = cmd.CreateParameter(); p.ParameterName = Db.ParamName(i); p.Value = args[i]; cmd.Parameters.Add(p);
             }
             await using var rd = await cmd.ExecuteReaderAsync(ct);
             for (int i = 0; i < rd.FieldCount; i++) dbCols.Add(rd.GetName(i));
@@ -175,7 +175,7 @@ public static class ApiDbComparer
         var apiRows = recs.Select(r =>
         {
             var d = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (dc, ap) in map) d[dc] = ApiDbVerifier.TryGetPath(r, ap, out var v) ? v : null;
+            foreach (var (dc, ap) in map) d[dc] = ApiDbVerifier.TryGetPath(r, ap, out var v, deep: false) ? v : null;
             return d;
         }).ToList();
 

@@ -61,7 +61,7 @@ public static class ExcelIO
     {
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("TestCases");
-        string[] h = { "Id","Name","Description","Type","CtrlMJobName","CtrlMArguments","TimeoutSeconds","ExpectedExitCode","ApiUrl","HttpMethod","RequestBody","RequestHeaders","ExpectedStatusCode","ExpectedResponseContains","ExePath","ExeArguments","FileCheckFolder","FileNamePattern","FileWaitSeconds","SpecFile","Delimiter","HasHeader","HeaderPrefix","TrailerPrefix","HeaderDateStart","HeaderDateLength","HeaderDateFormat","ExpectedHeaderDate","TrailerCountStart","TrailerCountLength","ApiJsonPath","DbProvider","DbConnectionString","DbQuery","DbColumn","CompareMode","Tolerance","ExpectedFile","ExpectedSheet","KeyColumn","IgnoreColumns","ApiRecordsPath","ColumnMap","FieldLayout","SkipHeaderLines","SkipTrailerLines","ResponseCodePath","ExpectedResponseCode","ResponseMessagePath","ExpectedResponseMessage","MessageMatch","ResponseCatalog","ExpectNoDbRows" };
+        string[] h = { "Id","Name","Description","Type","CtrlMJobName","CtrlMArguments","TimeoutSeconds","ExpectedExitCode","ApiUrl","HttpMethod","RequestBody","RequestHeaders","ExpectedStatusCode","ExpectedResponseContains","ExePath","ExeArguments","FileCheckFolder","FileNamePattern","FileWaitSeconds","SpecFile","Delimiter","HasHeader","HeaderPrefix","TrailerPrefix","HeaderDateStart","HeaderDateLength","HeaderDateFormat","ExpectedHeaderDate","TrailerCountStart","TrailerCountLength","ApiJsonPath","DbQuery","DbColumn","CompareMode","Tolerance","ExpectedFile","ExpectedSheet","KeyColumn","IgnoreColumns","ApiRecordsPath","ColumnMap","FieldLayout","SkipHeaderLines","SkipTrailerLines","ResponseCodePath","ExpectedResponseCode","ResponseMessagePath","ExpectedResponseMessage","MessageMatch","ResponseCatalog","ExpectNoDbRows" };
         for (int i = 0; i < h.Length; i++) ws.Cell(1, i + 1).Value = h[i];
         ws.Row(1).Style.Font.Bold = true;
         void R(int r, params (string col, object v)[] vals) { foreach (var (c, v) in vals) ws.Cell(r, Array.IndexOf(h, c) + 1).Value = XLCellValue.FromObject(v); }
@@ -76,27 +76,22 @@ public static class ExcelIO
             ("TrailerPrefix","TRL"),("TrailerCountStart",5),("TrailerCountLength",6),("TimeoutSeconds",30));
         R(8, ("Id",7),("Name","API balance vs DB"),("Description","Balance from API must equal the database"),("Type","ApiDbVerify"),
             ("ApiUrl","https://example.com/api/accounts/1001"),("HttpMethod","GET"),("ExpectedStatusCode",200),("ApiJsonPath","data.balance"),
-            ("DbProvider","SqlServer"),("DbConnectionString","Server=.;Database=Bank;Integrated Security=true;TrustServerCertificate=true"),
             ("DbQuery","SELECT Balance FROM Accounts WHERE AccountId = {api:data.accountId}"),("DbColumn","Balance"),("CompareMode","Numeric"),("Tolerance","0.01"),("TimeoutSeconds",30));
         R(9, ("Id",8),("Name","DB accounts vs Excel"),("Description","Every column from the query must match the Excel file"),("Type","DbExcelCompare"),
-            ("DbProvider","SqlServer"),("DbConnectionString","Server=.;Database=Bank;Integrated Security=true;TrustServerCertificate=true"),
             ("DbQuery","SELECT * FROM Accounts ORDER BY AccountId"),("ExpectedFile",@"Samples\Expected_Accounts.xlsx"),("KeyColumn","AccountId"),
             ("CompareMode","Numeric"),("Tolerance","0.01"),("TimeoutSeconds",60));
         R(10, ("Id",9),("Name","API customers vs DB"),("Description","API field names differ from DB column names"),("Type","ApiDbCompare"),
             ("ApiUrl","https://example.com/api/customers"),("HttpMethod","GET"),("ExpectedStatusCode",200),("ApiRecordsPath","data.items"),
-            ("DbProvider","SqlServer"),("DbConnectionString","Server=.;Database=Crm;Integrated Security=true;TrustServerCertificate=true"),
             ("DbQuery","SELECT CUST_ID, CUST_NM, BAL_AMT FROM CUSTOMER"),("ColumnMap","CUST_ID=id\nCUST_NM=customer.name\nBAL_AMT=balance"),
             ("KeyColumn","CUST_ID"),("CompareMode","Numeric"),("Tolerance","0.01"),("TimeoutSeconds",60));
         R(11, ("Id",10),("Name","Input file vs DB"),("Description","DB must match the fixed-position file after the app ran"),("Type","FixedFileDbCompare"),
             ("FileCheckFolder",@"C:\Input"),("FileNamePattern","accounts_*.txt"),("FileWaitSeconds",10),("SkipHeaderLines",1),("SkipTrailerLines",1),
             ("FieldLayout","ACCT_ID=1,6\nACCT_NAME=7,20\nBALANCE=27,10,dec:2\nOPEN_DT=37,8,date:yyyyMMdd\nSTATUS=45,1"),
-            ("DbProvider","SqlServer"),("DbConnectionString","Server=.;Database=Bank;Integrated Security=true;TrustServerCertificate=true"),
             ("DbQuery","SELECT ACCT_ID, ACCT_NAME, BALANCE, OPEN_DT, STATUS FROM ACCOUNT ORDER BY ACCT_ID"),("KeyColumn","ACCT_ID"),
             ("CompareMode","Numeric"),("Tolerance","0.01"),("TimeoutSeconds",60));
         R(12, ("Id",11),("Name","Account not found (error case)"),("Description","Status, code and message come from predefined data; nothing may be saved"),("Type","ApiDbCompare"),
             ("ApiUrl","https://example.com/api/accounts/999"),("HttpMethod","GET"),("ExpectedStatusCode",404),
             ("ResponseCodePath","responseCode"),("ExpectedResponseCode","14"),("ResponseMessagePath","responseMessage"),("ResponseCatalog",@"Samples\ResponseCatalog.xlsx"),
-            ("DbProvider","SqlServer"),("DbConnectionString","Server=.;Database=Bank;Integrated Security=true;TrustServerCertificate=true"),
             ("DbQuery","SELECT * FROM ACCOUNT WHERE ACCT_ID = 999"),("ExpectNoDbRows","Yes"),("TimeoutSeconds",30));
         ws.Columns().AdjustToContents();
         wb.SaveAs(path);

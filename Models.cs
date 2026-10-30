@@ -43,9 +43,6 @@ public class TestCase : Observable
     // ── ApiDbVerify fields (API value vs database value) ──────────────────────
     /// <summary>Path to the value in the JSON response, e.g. data.customer.balance or items[0].id</summary>
     public string ApiJsonPath { get; set; } = "";
-    /// <summary>ADO.NET provider: SqlServer (default) | Oracle | PostgreSql | MySql | Sqlite.</summary>
-    public string DbProvider { get; set; } = "";
-    public string DbConnectionString { get; set; } = "";
     /// <summary>Query returning the value to compare (first row used). May contain {api:path} placeholders, sent as SQL parameters.</summary>
     public string DbQuery { get; set; } = "";
     /// <summary>Result column to compare. Blank = first column.</summary>
@@ -139,7 +136,7 @@ public class TestCase : Observable
             A("Expected status", ExpectedStatusCode > 0 ? ExpectedStatusCode.ToString() : "");
             A("Expected contains", ExpectedResponseContains);
             A("Folder", FileCheckFolder); A("Pattern", FileNamePattern); A("Spec file", SpecFile); A("Delimiter", Delimiter); A("Has header", HasHeader);
-            A("API path", ApiJsonPath); A("DB provider", DbProvider); A("DB query", DbQuery); A("DB column", DbColumn); A("Compare", CompareMode); A("Tolerance", Tolerance);
+            A("API path", ApiJsonPath); A("DB query", DbQuery); A("DB column", DbColumn); A("Compare", CompareMode); A("Tolerance", Tolerance);
             A("Response code path", ResponseCodePath); A("Expected code", ExpectedResponseCode); A("Response message path", ResponseMessagePath); A("Expected message", ExpectedResponseMessage); A("Message match", MessageMatch); A("Response catalog", ResponseCatalog); A("Expect no DB rows", ExpectNoDbRows);
             A("Field layout", FieldLayout); A("Skip header lines", SkipHeaderLines > 0 ? SkipHeaderLines.ToString() : ""); A("Skip trailer lines", SkipTrailerLines > 0 ? SkipTrailerLines.ToString() : ""); A("Records path", ApiRecordsPath); A("Column map", ColumnMap); A("Excel file", ExpectedFile); A("Sheet", ExpectedSheet); A("Key column", KeyColumn); A("Ignore columns", IgnoreColumns);
             A("Header prefix", HeaderPrefix); A("Trailer prefix", TrailerPrefix);
@@ -196,22 +193,22 @@ public static class Kinds
         ["ApiDbVerify"] = ("Compare API value vs database", "⇄", new[]
         {
             "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode", "ApiJsonPath",
-            "DbProvider", "DbConnectionString", "DbQuery", "DbColumn", "CompareMode", "Tolerance"
+            "DbQuery", "DbColumn", "CompareMode", "Tolerance"
         }),
         ["DbExcelCompare"] = ("Compare database rows vs Excel", "🗃", new[]
         {
-            "DbProvider", "DbConnectionString", "DbQuery", "ExpectedFile", "ExpectedSheet", "KeyColumn", "IgnoreColumns", "CompareMode", "Tolerance"
+            "DbQuery", "ExpectedFile", "ExpectedSheet", "KeyColumn", "IgnoreColumns", "CompareMode", "Tolerance"
         }),
         ["ApiDbCompare"] = ("Check API response: code, message, database", "🔀", new[]
         {
             "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode",
             "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog", "ExpectedResponseContains",
-            "ApiRecordsPath", "DbProvider", "DbConnectionString", "DbQuery", "ExpectNoDbRows", "ColumnMap", "KeyColumn", "CompareMode", "Tolerance"
+            "ApiRecordsPath", "DbQuery", "ExpectNoDbRows", "ColumnMap", "KeyColumn", "CompareMode", "Tolerance"
         }),
         ["FixedFileDbCompare"] = ("Compare fixed-width file vs database", "🧾", new[]
         {
             "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "SkipHeaderLines", "SkipTrailerLines", "FieldLayout",
-            "DbProvider", "DbConnectionString", "DbQuery", "KeyColumn", "CompareMode", "Tolerance"
+            "DbQuery", "KeyColumn", "CompareMode", "Tolerance"
         }),
         ["TestSuite"] = ("Test suite (Excel)", "📋", Array.Empty<string>()),
     };
@@ -251,7 +248,6 @@ public static class Kinds
         "ApiRecordsPath" => "Records path in response (blank = whole response)",
         "ColumnMap" => "Column map: DbColumn=api.path (one per line)",
         "ApiJsonPath" => "Value in response (e.g. data.balance or items[0].id)",
-        "DbProvider" => "Database type (SqlServer / Oracle / PostgreSql / MySql / Sqlite)", "DbConnectionString" => "Connection string",
         "DbQuery" => "SQL query (use {api:data.id} to pass an API value)", "DbColumn" => "Result column (blank = first)",
         "CompareMode" => "Compare as (Text / TextIgnoreCase / Numeric / Date)", "Tolerance" => "Numeric tolerance (e.g. 0.01)",
         "HeaderPrefix"       => "Header line prefix (e.g. HDR)",
@@ -285,7 +281,7 @@ public static class Kinds
         {
             ("INPUT FILE (FIXED POSITION)", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "SkipHeaderLines", "SkipTrailerLines" }),
             ("FIELD POSITIONS", new[] { "FieldLayout", "KeyColumn" }),
-            ("DATABASE (AFTER THE APP RAN)", new[] { "DbProvider", "DbConnectionString", "DbQuery" }),
+            ("DATABASE (AFTER THE APP RAN)", new[] { "DbQuery" }),
             ("COMPARE", new[] { "CompareMode", "Tolerance" }),
         },
         "ApiDbCompare" => new[]
@@ -293,13 +289,13 @@ public static class Kinds
             ("API REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode" }),
             ("EXPECTED RESPONSE (PREDEFINED DATA)", new[] { "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog", "ExpectedResponseContains" }),
             ("RECORDS IN RESPONSE", new[] { "ApiRecordsPath" }),
-            ("DATABASE (OPTIONAL)", new[] { "DbProvider", "DbConnectionString", "DbQuery", "ExpectNoDbRows" }),
+            ("DATABASE (OPTIONAL)", new[] { "DbQuery", "ExpectNoDbRows" }),
             ("COLUMN MAPPING", new[] { "ColumnMap", "KeyColumn" }),
             ("COMPARE", new[] { "CompareMode", "Tolerance" }),
         },
         "DbExcelCompare" => new[]
         {
-            ("DATABASE", new[] { "DbProvider", "DbConnectionString", "DbQuery" }),
+            ("DATABASE", new[] { "DbQuery" }),
             ("EXCEL (EXPECTED DATA)", new[] { "ExpectedFile", "ExpectedSheet", "KeyColumn" }),
             ("COMPARE", new[] { "IgnoreColumns", "CompareMode", "Tolerance" }),
         },
@@ -307,7 +303,7 @@ public static class Kinds
         {
             ("API REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode" }),
             ("VALUE FROM API", new[] { "ApiJsonPath" }),
-            ("DATABASE", new[] { "DbProvider", "DbConnectionString", "DbQuery", "DbColumn" }),
+            ("DATABASE", new[] { "DbQuery", "DbColumn" }),
             ("COMPARE", new[] { "CompareMode", "Tolerance" }),
         },
         _ => Array.Empty<(string, string[])>()
@@ -316,7 +312,7 @@ public static class Kinds
     public static string Default(string f) => f switch
     {
         "ExpectedExitCode" => "0", "ExpectedStatusCode" => "200", "HttpMethod" => "GET", "FileWaitSeconds" => "30", "SkipHeaderLines" => "0", "SkipTrailerLines" => "0", "HasHeader" => "Yes",
-        "DbProvider" => "SqlServer", "CompareMode" => "Text", "Tolerance" => "0", _ => ""
+        "CompareMode" => "Text", "Tolerance" => "0", _ => ""
     };
 }
 

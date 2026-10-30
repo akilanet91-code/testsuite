@@ -253,7 +253,7 @@ public partial class FlowWindow : Window
         {
             Section(PropsPanel, title);
             foreach (var f in fields)
-                AddField(PropsPanel, Kinds.Label(f), n.Props.GetValueOrDefault(f, ""), t => { n.Props[f] = t; Refresh(n); }, multi: f is "DbQuery" or "DbConnectionString" or "ColumnMap" or "FieldLayout");
+                AddField(PropsPanel, Kinds.Label(f), n.Props.GetValueOrDefault(f, ""), t => { n.Props[f] = t; Refresh(n); }, multi: f is "DbQuery" or "ColumnMap" or "FieldLayout");
         }
         if (n.Kind == "TestSuite")
             PropsPanel.Children.Add(new TextBlock { Text = "Runs this node’s own Excel test cases (Advanced > Import Excel); passes only if all pass.", Foreground = Res("Mu"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });
