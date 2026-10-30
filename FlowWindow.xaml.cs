@@ -396,6 +396,7 @@ public partial class FlowWindow : Window
         if (doc.Nodes.Count == 0) return;
         cts = new CancellationTokenSource(); StopBtn.IsEnabled = true;
         foreach (var n in doc.Nodes) n.Status = "";
+        RunContext.Clear();
         RefreshAll(); Log("INFO", $"Flow started: {doc.Nodes.Count} nodes");
         string prev = "passed";
         try

@@ -72,6 +72,7 @@ public partial class MainWindow : Window
     {
         if (items.Count == 0) return;
         _cts = new CancellationTokenSource(); StopBtn.IsEnabled = true;
+        RunContext.Clear();
         foreach (var c in items) { c.Status = "Pending"; c.Message = ""; c.Duration = 0; }
         foreach (var c in items)
         {

@@ -169,3 +169,12 @@ ROW_ID={notnull}
 - `DbCheckWhen` (ApiDbCompare only): `Before` (default, record check before the API call) or `After` (after the API call, so the query and the values can use `{api:path}`, e.g. the id returned by the API).
 - Only the columns listed in `ExpectedValues` are checked. A listed column that the query does not return is reported with the names the query did return.
 Try it: import `Samples\TestCases_InsertValidation.xlsx`.
+
+## Chaining API calls (use a value from one response in the next step)
+Column `SaveAs` (ApiCall, ApiDbVerify, ApiDbCompare): one `NAME=json.path` per line, e.g. `refNo=data.referenceNo`.
+Use it later as `{var:refNo}` in ApiUrl, RequestBody, RequestHeaders, DbQuery, DbCheckQuery, ExpectedValues, ExpectedResponseContains.
+- Values live for one run (Run All / Run Selected / Run Flow) and are cleared when the next run starts, so nothing is reused by accident.
+- In SQL fields the value has single quotes doubled, so `WHERE REF_NO = '{var:refNo}'` is safe.
+- A step that uses `{var:x}` before anything saved it fails with a clear message (it never runs with an empty value).
+- Saving happens only on a 2xx response; a non-2xx response fails on its status as usual.
+- Try it: import Samples\TestCases_ChainedApi.xlsx (point the URLs at your API). Run steps in order with Run All.

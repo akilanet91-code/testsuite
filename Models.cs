@@ -31,6 +31,8 @@ public class TestCase : Observable
     public string RequestHeaders { get; set; } = "";
     public int ExpectedStatusCode { get; set; }
     public string ExpectedResponseContains { get; set; } = "";
+    /// <summary>Save values from the API response for later steps, one NAME=json.path per line, e.g. refNo=data.referenceNo. Use later as {var:refNo}.</summary>
+    public string SaveAs { get; set; } = "";
     public string ExePath { get; set; } = "";
     public string ExeArguments { get; set; } = "";
     public string FileCheckFolder { get; set; } = "";
@@ -144,7 +146,7 @@ public class TestCase : Observable
             A("Exe", ExePath); A("Exe args", ExeArguments);
             A("URL", ApiUrl); A("Method", HttpMethod); A("Body", RequestBody); A("Headers", RequestHeaders);
             A("Expected status", ExpectedStatusCode > 0 ? ExpectedStatusCode.ToString() : "");
-            A("Expected contains", ExpectedResponseContains);
+            A("Expected contains", ExpectedResponseContains); A("Save as", SaveAs);
             A("Folder", FileCheckFolder); A("Pattern", FileNamePattern); A("Spec file", SpecFile); A("Delimiter", Delimiter); A("Has header", HasHeader);
             A("API path", ApiJsonPath); A("DB query", DbQuery); A("DB column", DbColumn); A("Compare", CompareMode); A("Tolerance", Tolerance);
             A("DB check query", DbCheckQuery); A("DB check when", DbCheckWhen); A("Expected values", ExpectedValues); A("DB check expects", DbCheckExpect); A("Response code path", ResponseCodePath); A("Expected code", ExpectedResponseCode); A("Response message path", ResponseMessagePath); A("Expected message", ExpectedResponseMessage); A("Message match", MessageMatch); A("Response catalog", ResponseCatalog); A("Expect no DB rows", ExpectNoDbRows);
@@ -191,7 +193,7 @@ public static class Kinds
     {
         ["CtrlMJob"]  = ("Control-M job", "⚙", new[] { "CtrlMJobName", "CtrlMArguments", "ExpectedExitCode" }),
         ["ExeRunner"] = ("Run EXE", "▶", new[] { "ExePath", "ExeArguments", "ExpectedExitCode", "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
-        ["ApiCall"]   = ("REST request", "🌐", new[] { "ApiUrl", "HttpMethod", "RequestBody", "RequestHeaders", "ExpectedStatusCode", "ExpectedResponseContains" }),
+        ["ApiCall"]   = ("REST request", "🌐", new[] { "ApiUrl", "HttpMethod", "RequestBody", "RequestHeaders", "ExpectedStatusCode", "ExpectedResponseContains", "SaveAs" }),
         ["FileCheck"] = ("Check file", "📄", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
         ["ExcelVerify"] = ("Verify file vs spec (xlsx/csv/txt)", "✔", new[] { "FileCheckFolder", "FileNamePattern", "SpecFile", "Delimiter", "HasHeader" }),
         ["HeaderTrailerVerify"] = ("Verify header date + trailer count", "🗂", new[]
@@ -202,7 +204,7 @@ public static class Kinds
         }),
         ["ApiDbVerify"] = ("Compare API value vs database", "⇄", new[]
         {
-            "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode", "ApiJsonPath",
+            "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode", "SaveAs", "ApiJsonPath",
             "DbQuery", "DbColumn", "CompareMode", "Tolerance"
         }),
         ["DbExcelCompare"] = ("Compare database rows vs Excel", "🗃", new[]
@@ -213,7 +215,7 @@ public static class Kinds
         ["ApiDbCompare"] = ("Check API response: code, message, database", "🔀", new[]
         {
             "DbCheckQuery", "DbCheckExpect", "DbCheckWhen", "ExpectedValues",
-            "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode",
+            "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode", "SaveAs",
             "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog", "ExpectedResponseContains",
             "ApiRecordsPath", "DbQuery", "ExpectNoDbRows", "ColumnMap", "KeyColumn", "CompareMode", "Tolerance"
         }),
@@ -248,6 +250,7 @@ public static class Kinds
         "ExpectedExitCode" => "Expected exit code",
         "ApiUrl" => "URL", "HttpMethod" => "Method", "RequestBody" => "Body", "RequestHeaders" => "Headers",
         "ExpectedStatusCode" => "Expected status code", "ExpectedResponseContains" => "Response contains",
+        "SaveAs" => "Save from response: NAME=json.path (one per line). Use later as {var:NAME}",
         "FileCheckFolder" => "Folder", "FileNamePattern" => "File name pattern", "FileWaitSeconds" => "Wait (seconds)",
         "SpecFile" => "Spec file (.xlsx)", "Delimiter" => "Delimiter (blank = auto-detect)", "HasHeader" => "Has header (Yes / No)",
         "ExpectedFile" => "Excel file with expected data (.xlsx)", "ExpectedSheet" => "Sheet name (blank = first sheet)",
@@ -283,7 +286,8 @@ public static class Kinds
         "ExeRunner" => new[] { ("COMMAND LINE", new[] { "ExePath", "ExeArguments" }), ("EXPECTED RESULT", new[] { "ExpectedExitCode" }),
                                ("OUTPUT FILE CHECK (optional)", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }) },
         "ApiCall" => new[] { ("REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody" }),
-                             ("EXPECTED RESPONSE", new[] { "ExpectedStatusCode", "ExpectedResponseContains" }) },
+                             ("EXPECTED RESPONSE", new[] { "ExpectedStatusCode", "ExpectedResponseContains" }),
+                             ("SAVE FOR LATER STEPS", new[] { "SaveAs" }) },
         "FileCheck" => new[] { ("FILE", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }) },
         "ExcelVerify" => new[] { ("GENERATED FILE", new[] { "FileCheckFolder", "FileNamePattern", "Delimiter", "HasHeader" }), ("SPECIFICATION", new[] { "SpecFile" }) },
         "HeaderTrailerVerify" => new[]
@@ -307,7 +311,7 @@ public static class Kinds
         "ApiDbCompare" => new[]
         {
             ("DATABASE CHECK (RECORD + EXPECTED VALUES)", new[] { "DbCheckQuery", "DbCheckExpect", "DbCheckWhen", "ExpectedValues" }),
-            ("API REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode" }),
+            ("API REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode", "SaveAs" }),
             ("EXPECTED RESPONSE (PREDEFINED DATA)", new[] { "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog", "ExpectedResponseContains" }),
             ("RECORDS IN RESPONSE", new[] { "ApiRecordsPath" }),
             ("DATABASE (OPTIONAL)", new[] { "DbQuery", "ExpectNoDbRows" }),
@@ -322,7 +326,7 @@ public static class Kinds
         },
         "ApiDbVerify" => new[]
         {
-            ("API REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode" }),
+            ("API REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody", "ExpectedStatusCode", "SaveAs" }),
             ("VALUE FROM API", new[] { "ApiJsonPath" }),
             ("DATABASE", new[] { "DbQuery", "DbColumn" }),
             ("COMPARE", new[] { "CompareMode", "Tolerance" }),

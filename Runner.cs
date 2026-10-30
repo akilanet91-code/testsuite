@@ -23,7 +23,8 @@ public static class Runner
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(stop);
             cts.CancelAfter(TimeSpan.FromSeconds(tc.TimeoutSeconds > 0 ? tc.TimeoutSeconds : 300));
-            var (ok, msg) = await ExecuteAsync(tc, cts.Token);
+            var run = RunContext.Resolved(tc);   // {var:x} -> saved values (fails clearly if an earlier step did not save it)
+            var (ok, msg) = await ExecuteAsync(run, cts.Token);
             tc.Status = ok ? "Passed" : "Failed"; tc.Message = msg;
         }
         catch (OperationCanceledException) { tc.Status = "Failed"; tc.Message = stop.IsCancellationRequested ? "Stopped by user" : "Timed out"; }
@@ -154,7 +155,9 @@ public static class Runner
             else req.Headers.TryAddWithoutValidation(k, v);
         }
         using var res = await Http.SendAsync(req, ct);
-        return ((int)res.StatusCode, await res.Content.ReadAsStringAsync(ct));
+        var text = await res.Content.ReadAsStringAsync(ct);
+        if ((int)res.StatusCode < 300) RunContext.Capture(tc.SaveAs, text);   // SaveAs: keep values for later steps
+        return ((int)res.StatusCode, text);
     }
 
     static async Task<(bool, string)> CallApi(TestCase tc, CancellationToken ct)
