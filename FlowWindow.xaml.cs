@@ -1,4 +1,3 @@
-using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -41,6 +40,8 @@ public partial class FlowWindow : Window
         RefreshAll();
         Log("INFO", "Ready. Click a node to edit it; use Advanced > Import Excel to give that node its own test cases.");
         AppState.CasesImported += OnImported;
+        Runner.LogSink = (level, msg) => Dispatcher.Invoke(() => Log(level, msg));
+        Closed += (_, _) => Runner.LogSink = null;
         Closed += (_, _) => AppState.CasesImported -= OnImported;
     }
 
@@ -342,6 +343,7 @@ public partial class FlowWindow : Window
                 ct.ThrowIfCancellationRequested();
                 c.Status = "Pending"; c.Message = ""; c.Duration = 0;
                 await Runner.RunAsync(c, ct);
+                Log(c.Status == "Passed" ? "INFO" : "FAIL", $"Case {c.Id} “{c.Name}” {c.Status.ToLowerInvariant()}: {c.Message}");
             }
             int pass = n.Cases.Count(c => c.Status == "Passed");
             ok = pass == n.Cases.Count;

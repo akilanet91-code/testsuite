@@ -73,6 +73,8 @@ public static class RunContext
                 if (!ApiDbVerifier.TryGetPath(doc.RootElement, path, out var v) || string.IsNullOrEmpty(v))
                     throw new InvalidOperationException($"SaveAs “{name}”: path “{path}” not found or empty in the response ({ApiDbVerifier.Describe(doc.RootElement)})");
                 lock (Gate) Vars[name] = v;
+                var shown = v.Length > 80 ? v.Substring(0, 80) + "..." : v;
+                Runner.LogSink?.Invoke("INFO", "Saved {var:" + name + "} = " + shown);
             }
         }
     }

@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.IO;
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 
@@ -14,6 +12,9 @@ public static class Runner
     public static string CtrlMCommand = "ctm";
 
     static readonly HttpClient Http = new();
+
+    /// <summary>Optional hook: the Flow window sets it so a test can write a line (level INFO / FAIL, message) to the app log.</summary>
+    public static Action<string, string>? LogSink;
 
     public static async Task RunAsync(TestCase tc, CancellationToken stop)
     {
@@ -158,6 +159,7 @@ public static class Runner
         using var res = await Http.SendAsync(req, ct);
         var text = await res.Content.ReadAsStringAsync(ct);
         if ((int)res.StatusCode < 300) RunContext.Capture(tc.SaveAs, text);   // SaveAs: keep values for later steps
+        else if (!string.IsNullOrWhiteSpace(tc.SaveAs)) LogSink?.Invoke("FAIL", $"SaveAs skipped: HTTP {(int)res.StatusCode} (values are saved only for HTTP below 300)");
         return ((int)res.StatusCode, text);
     }
 

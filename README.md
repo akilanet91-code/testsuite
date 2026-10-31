@@ -88,6 +88,8 @@ Node / Type `ApiDbCompare` ("Compare API response vs database (many fields)").
 - `KeyColumn`: DB column that identifies a row (must be in `ColumnMap`), so rows are paired by key. Blank = by row order.
 - Numbers compare as numbers (`Tolerance`), dates as dates, others as text (`CompareMode` Text / TextIgnoreCase forces text).
 - Reported: wrong values, rows only in DB or only in the API, and API fields that are not found.
+In the Flow window, an API answer other than HTTP 200 also writes a line to the log (`API returned HTTP 400 for “name”: “message”`; FAIL when it was not the expected status, INFO when the test expects it), and every imported test case writes its result line to the log.
+When the HTTP status is not the expected one, the issue also shows what the API said: `ResponseMessagePath` if set, else a common error field (`message`, `error.message`, `errors[0].message`, `error`, `detail`, `title`...), else the first 300 characters of the body.
 `ExpectedValues` (`COLUMN=value`, one per line) is also checked against the rows of `DbQuery` when `DbCheckQuery` is blank: one row must hold every value (`{any}`, `{notnull}`, `{null}`, `{today}`, `{api:path}` work). `ColumnMap` = `{skip}` checks only these values.
 For a list, write one record per row and separate the records with a blank line or `---`. Every record must match a different DB row; start each record with the `KeyColumn` value (e.g. `USER_ID=1`) to pick the row, otherwise the first unused row that matches is used. Sample case 4.
 Try it: import `Samples\TestCases_ApiDbCompare.xlsx`.
