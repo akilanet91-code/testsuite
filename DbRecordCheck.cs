@@ -84,7 +84,7 @@ public static class DbRecordCheck
     }
 
     /// <summary>One COLUMN=value pair per line. {api:path} in a value is replaced by the value from the API response.</summary>
-    static List<(string col, string value)> ParseExpected(string? text, JsonDocument? api)
+    internal static List<(string col, string value)> ParseExpected(string? text, JsonDocument? api)
     {
         var list = new List<(string col, string value)>();
         foreach (var line in (text ?? "").Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
@@ -99,7 +99,7 @@ public static class DbRecordCheck
     }
 
     /// <summary>Special values: {notnull} must have a value, {null} must be empty, {today} must be today's date, {any} is not checked.</summary>
-    static List<string> CompareRow(Dictionary<string, string> row, List<(string col, string value)> expected, List<string> cols, TestCase tc)
+    internal static List<string> CompareRow(Dictionary<string, string> row, List<(string col, string value)> expected, List<string> cols, TestCase tc)
     {
         var diffs = new List<string>();
         foreach (var (col, exp) in expected)

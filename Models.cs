@@ -133,7 +133,7 @@ public class TestCase : Observable
         "ctrlmjob" => "⚙", "exerunner" => "▶", "exewithfilecheck" => "📄",
         "apicall" or "api" or "restapi" => "🌐", "filecheck" => "📄",
         "excelverify" or "fileverify" => "✔",
-        "headertrailerverify" => "🗂", "apidbverify" => "⇄", "dbexcelcompare" => "🗃", "dbrecordcheck" => "🔎", "apidbcompare" => "🔀", "fixedfiledbcompare" => "🧾", _ => "•"
+        "headertrailerverify" => "🗂", "apidbverify" => "⇄", "dbexcelcompare" => "🗃", "dbrecordcheck" => "🔎", "apidbcompare" => "🔀", "fixedfiledbcompare" => "🧾", "csvdbcompare" => "📊", _ => "•"
     };
 
     [JsonIgnore] public string Details
@@ -195,7 +195,7 @@ public static class Kinds
         ["ExeRunner"] = ("Run EXE", "▶", new[] { "ExePath", "ExeArguments", "ExpectedExitCode", "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
         ["ApiCall"]   = ("REST request", "🌐", new[] { "ApiUrl", "HttpMethod", "RequestBody", "RequestHeaders", "ExpectedStatusCode", "ExpectedResponseContains", "SaveAs" }),
         ["FileCheck"] = ("Check file", "📄", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
-        ["ExcelVerify"] = ("Verify file vs spec (xlsx/csv/txt)", "✔", new[] { "FileCheckFolder", "FileNamePattern", "SpecFile", "Delimiter", "HasHeader" }),
+        ["ExcelVerify"] = ("Verify file vs spec (xlsx/csv/txt/pdf)", "✔", new[] { "FileCheckFolder", "FileNamePattern", "SpecFile", "Delimiter", "HasHeader" }),
         ["HeaderTrailerVerify"] = ("Verify header date + trailer count", "🗂", new[]
         {
             "FileCheckFolder", "FileNamePattern", "FileWaitSeconds",
@@ -224,6 +224,11 @@ public static class Kinds
             "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "SkipHeaderLines", "SkipTrailerLines", "FieldLayout",
             "DbQuery", "KeyColumn", "CompareMode", "Tolerance"
         }),
+        ["CsvDbCompare"] = ("Compare CSV report vs database", "📊", new[]
+        {
+            "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "Delimiter", "HasHeader",
+            "DbQuery", "ColumnMap", "KeyColumn", "IgnoreColumns", "CompareMode", "Tolerance"
+        }),
         ["TestSuite"] = ("Test suite (Excel)", "📋", Array.Empty<string>()),
     };
     public static string DefaultDesc(string kind) => kind switch
@@ -239,6 +244,7 @@ public static class Kinds
         "DbRecordCheck" => "Check that a record is in the database (or is not) and holds the expected values from Excel",
         "ApiDbCompare" => "Check status, response code and message against predefined data, and compare the response with the database",
         "FixedFileDbCompare" => "Check that the DB was updated exactly as the fixed-position file says",
+        "CsvDbCompare" => "Read the CSV report and check every column against the database rows",
         "TestSuite" => "Run the test cases imported from Excel",
         _ => ""
     };
@@ -264,7 +270,7 @@ public static class Kinds
         "DbCheckQuery" => "Record query (e.g. SELECT 1 FROM T WHERE Id = 'C001')", "DbCheckExpect" => "Record must be: Exists / NotExists", "DbCheckWhen" => "Run the DB check: Before / After the API call",
         "ExpectedValues" => "Expected values: COLUMN=value (one per line)",
         "ApiRecordsPath" => "Records path in response (blank = whole response)",
-        "ColumnMap" => "Column map: DbColumn=api.path (one per line)",
+        "ColumnMap" => "Column map: DbColumn=api.path or DbColumn=CsvHeader (one per line, blank = same names)",
         "ApiJsonPath" => "Value in response (e.g. data.balance or items[0].id)",
         "DbQuery" => "SQL query (use {api:data.id} to pass an API value)", "DbColumn" => "Result column (blank = first)",
         "CompareMode" => "Compare as (Text / TextIgnoreCase / Numeric / Date)", "Tolerance" => "Numeric tolerance (e.g. 0.01)",
@@ -301,6 +307,13 @@ public static class Kinds
             ("INPUT FILE (FIXED POSITION)", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "SkipHeaderLines", "SkipTrailerLines" }),
             ("FIELD POSITIONS", new[] { "FieldLayout", "KeyColumn" }),
             ("DATABASE (AFTER THE APP RAN)", new[] { "DbQuery" }),
+            ("COMPARE", new[] { "CompareMode", "Tolerance" }),
+        },
+        "CsvDbCompare" => new[]
+        {
+            ("CSV REPORT", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "Delimiter", "HasHeader" }),
+            ("DATABASE", new[] { "DbQuery" }),
+            ("COLUMN MAPPING", new[] { "ColumnMap", "KeyColumn", "IgnoreColumns" }),
             ("COMPARE", new[] { "CompareMode", "Tolerance" }),
         },
         "DbRecordCheck" => new[]

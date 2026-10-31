@@ -4,7 +4,7 @@ using System.Text;
 namespace TestFlow;
 
 /// <summary>Reads a generated file into rows of header->value.
-/// Excel (.xlsx/.xlsm); fixed-width text (spec has numeric Start + Length); or ANY delimited text:
+/// Excel (.xlsx/.xlsm); PDF (text layer, see PdfTextReader); fixed-width text (spec has numeric Start + Length); or ANY delimited text:
 /// one or several characters, auto-detected or given, with or without a header line.</summary>
 public static class GeneratedReader
 {
@@ -16,8 +16,14 @@ public static class GeneratedReader
         var ext = Path.GetExtension(path).ToLowerInvariant();
         if (ext is ".xlsx" or ".xlsm") return ExcelIO.ReadRows(path);
 
-        var lines = ReadLines(path);
         bool fixedWidth = spec.Count > 0 && spec.All(r => IsNum(r, "Start") && IsNum(r, "Length"));
+        List<string> lines;
+        if (PdfTextReader.IsPdf(path))
+        {
+            lines = PdfTextReader.ReadLines(path, fixedWidth ? PdfLineMode.Layout : PdfLineMode.Columns);
+            if (lines.Count == 0) warn?.Invoke("PDF has no text layer (scanned image?) - nothing to read");
+        }
+        else lines = ReadLines(path);
         return fixedWidth ? ReadFixed(lines, spec) : ReadDelimited(lines, spec, delimiter, hasHeader, warn);
     }
 

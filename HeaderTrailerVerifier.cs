@@ -112,6 +112,7 @@ public static class HeaderTrailerVerifier
     /// <summary>Reads all non-empty lines, preserving leading/trailing whitespace per line for position accuracy.</summary>
     static List<string> ReadNonEmpty(string path)
     {
+        if (PdfTextReader.IsPdf(path)) return PdfTextReader.ReadLines(path, PdfLineMode.Layout);
         var lines = new List<string>();
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var sr = new StreamReader(fs, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);

@@ -56,6 +56,7 @@ public static class Runner
             case "apicall": case "api": case "restapi": return await CallApi(tc, ct);
             case "filecheck": return await CheckFile(tc, ct);
             case "apidbverify": return await ApiDbVerifier.RunAsync(tc, ct);
+            case "csvdbcompare": return await CsvDbComparer.RunAsync(tc, ct);
             case "fixedfiledbcompare": return await FixedFileDbComparer.RunAsync(tc, ct);
             case "dbrecordcheck": return await DbRecordCheck.RunAsync(tc, ct);
             case "apidbcompare": return await ApiDbComparer.RunAsync(tc, ct);

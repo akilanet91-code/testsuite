@@ -11,6 +11,7 @@
         <TextBlock Text="⚡ TestFlow" FontSize="18" FontWeight="Bold" Margin="0,0,18,0" VerticalAlignment="Center"/>
         <Button Content="⬆ Import Excel" Click="Import_Click"/>
         <Button Content="📋 Template" Click="Template_Click"/>
+        <Button Content="🧾 CSV → Test Cases" Click="CsvGen_Click"/>
         <Button Content="▶ Run All" Background="{StaticResource Ac}" Click="RunAll_Click"/>
         <Button Content="▶ Run Selected" Click="RunSelected_Click"/>
         <Button Content="🔀 Open Flow" Click="OpenFlow_Click"/>

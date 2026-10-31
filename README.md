@@ -35,6 +35,31 @@ Lines with a different field count than the header are reported as "Format" issu
 Fixed-width: put numeric Start (1-based) and Length columns in the spec Mapping sheet.
 Limit: a quoted value cannot span several lines.
 
+### CSV files: generate the test cases from a CSV
+Button **CSV -> Test Cases** (Test Runner toolbar). Pick a known-good CSV (or any delimited text file); the app reads it with the same reader as `ExcelVerify` (`CsvTestGenerator.cs`) and writes two workbooks:
+- `<name>_Spec.xlsx`: sheet `Mapping`, one row per column. `DataType` (bool / int / decimal / date / text), `Required` (Yes when no value is empty), `Pattern` (email shape when every value looks like an email) and `ExpectedValue` (when every row has the same value) are learned from the data.
+- `<name>.xlsx`: sheet `TestCases` with `ExcelVerify` cases: the exact file, the newest `*.csv` in the folder (chain it after a Run EXE node), and the file read as comma separated.
+Import the test case file with Import Excel and run it. Review the spec first: rules are guesses, so errors in the sample become rules.
+Try it: import `Samples\TestCases_CsvGenerated.xlsx` (made from `Samples\Valid_Orders.csv`). `Samples\Generated_Sample.csv` has deliberate errors and fails it.
+
+### Verify a CSV report against the database
+Node / Type `CsvDbCompare` (palette: "Compare CSV report vs database"). It reads the newest file matching `FileNamePattern` in `FileCheckFolder` (waits `FileWaitSeconds`), runs `DbQuery` and compares EVERY mapped column of every record. Chain it after a "Run EXE" node that creates the CSV. The database comes from `appsettings.json`.
+- `Delimiter` blank = auto-detect (or comma / pipe / tab / any text); `HasHeader` Yes (default) reads the column names from the first line.
+- `ColumnMap`: one `DbColumn=CsvHeader` per line, e.g. `CUST_NM=FullName`. Blank = every DB column against the CSV header of the same name. With `HasHeader` = No the CSV columns are taken from the order of `ColumnMap`.
+- `KeyColumn`: DB column that identifies a record, so rows are paired by key. Blank = by order. `IgnoreColumns`: DB columns to skip.
+- Numbers compare as numbers (`Tolerance`), dates as dates, others as text (`CompareMode` Text / TextIgnoreCase forces text).
+- Reported: wrong values (CSV vs DB), records only in the CSV, rows only in the DB, columns not found in the CSV or the query.
+Try it: import `Samples\\TestCases_CsvDbCompare.xlsx` (inline-values query, works on any SQL Server; cases 1 and 4 pass, cases 2 and 3 have deliberate errors). Format checks of the CSV itself stay in `ExcelVerify`.
+
+### PDF files
+`ExcelVerify`, `HeaderTrailerVerify` and `FixedFileDbCompare` also read PDF files (`FileNamePattern` = `*.pdf`). The text layer is read by the app's own parser (`PdfTextReader.cs`, no extra library, no OCR):
+- Table-style PDF (`ExcelVerify`): words on the same line are split into columns where the gap is wide (a TAB), so leave `Delimiter` blank (auto-detect) or use `tab`.
+- Fixed-width layouts (spec with Start + Length, `HeaderTrailerVerify`, `FixedFileDbCompare`): characters are placed by their position on the page, so use a monospaced font in the PDF for exact positions.
+- All pages are read in order, top to bottom. Scanned PDFs (images only) have no text layer and are reported as "nothing to read".
+- Not supported: encrypted PDFs, scanned PDFs, text inside form XObjects, rotated text, LZW/ASCII85 streams, fonts without a ToUnicode map that use a custom 2-byte encoding.
+- Limit: an empty cell in a PDF table leaves no text, so that line has fewer fields and is reported as a "Format" issue.
+Try it: import `Samples\TestCases_ExcelVerify.xlsx` (case 7, `Samples\Generated_Sample.pdf`).
+
 ## Compare an API value with the database
 Node / Type `ApiDbVerify` (palette: "Compare API value vs database"). It calls the API, reads one value from the JSON response,
 runs a SQL query and checks that both values are equal.
@@ -63,6 +88,8 @@ Node / Type `ApiDbCompare` ("Compare API response vs database (many fields)").
 - `KeyColumn`: DB column that identifies a row (must be in `ColumnMap`), so rows are paired by key. Blank = by row order.
 - Numbers compare as numbers (`Tolerance`), dates as dates, others as text (`CompareMode` Text / TextIgnoreCase forces text).
 - Reported: wrong values, rows only in DB or only in the API, and API fields that are not found.
+`ExpectedValues` (`COLUMN=value`, one per line) is also checked against the rows of `DbQuery` when `DbCheckQuery` is blank: one row must hold every value (`{any}`, `{notnull}`, `{null}`, `{today}`, `{api:path}` work). `ColumnMap` = `{skip}` checks only these values.
+For a list, write one record per row and separate the records with a blank line or `---`. Every record must match a different DB row; start each record with the `KeyColumn` value (e.g. `USER_ID=1`) to pick the row, otherwise the first unused row that matches is used. Sample case 4.
 Try it: import `Samples\TestCases_ApiDbCompare.xlsx`.
 
 ## Console app processed a fixed-position file and updated the DB: check the DB against the file

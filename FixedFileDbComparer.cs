@@ -32,7 +32,9 @@ public static class FixedFileDbComparer
         }
 
         // 2. read records (skip header / trailer lines) and cut the fields by position
-        var lines = (await File.ReadAllLinesAsync(file, ct)).Where(l => l.Trim().Length > 0).ToList();
+        var lines = (PdfTextReader.IsPdf(file)
+            ? await Task.Run(() => PdfTextReader.ReadLines(file, PdfLineMode.Layout), ct)
+            : (await File.ReadAllLinesAsync(file, ct)).ToList()).Where(l => l.Trim().Length > 0).ToList();
         int head = Math.Max(0, tc.SkipHeaderLines), tail = Math.Max(0, tc.SkipTrailerLines);
         var issues = new List<string>();
         if (lines.Count < head + tail) return (false, $"{Path.GetFileName(file)} has only {lines.Count} line(s), fewer than header + trailer lines");

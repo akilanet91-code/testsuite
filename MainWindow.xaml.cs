@@ -58,6 +58,22 @@ public partial class MainWindow : Window
         if (dlg.ShowDialog() == true) { ExcelIO.SaveTemplate(dlg.FileName); MessageBox.Show("Template saved."); }
     }
 
+    void CsvGen_Click(object s, RoutedEventArgs e)
+    {
+        var open = new OpenFileDialog { Filter = "CSV / delimited text|*.csv;*.txt;*.dat|All files|*.*", Title = "Choose a GOOD sample CSV" };
+        if (open.ShowDialog() != true) return;
+        var save = new SaveFileDialog { Filter = "Excel workbook (*.xlsx)|*.xlsx", FileName = "TestCases_" + System.IO.Path.GetFileNameWithoutExtension(open.FileName) + ".xlsx" };
+        if (save.ShowDialog() != true) return;
+        try
+        {
+            var r = CsvTestGenerator.Generate(open.FileName, save.FileName);
+            var msg = $"Read {r.Rows} row(s), {r.Columns} column(s).\nTest cases: {r.CasesPath}\nSpec: {r.SpecPath}\n\nUse Import Excel to load the test cases. Review the spec: rules are learned from the sample.";
+            if (r.Warnings.Count > 0) msg += "\n\nWarnings:\n" + string.Join("\n", r.Warnings.Take(5));
+            MessageBox.Show(msg, "CSV → Test Cases");
+        }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "CSV → Test Cases", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    }
+
     void OpenFlow_Click(object s, RoutedEventArgs e)
     {
         if (_flow == null || !_flow.IsLoaded) { _flow = new FlowWindow(); _flow.Show(); }

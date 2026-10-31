@@ -166,6 +166,58 @@ public static class ApiDbComparer
             issues.Add($"DB query returned {dbRows.Count} row(s), expected none"); return null;
         }
 
+        // ExpectedValues without DbCheckQuery: the DbQuery rows must hold the values typed in the Excel row.
+        // One record = lines COLUMN=value. Several records: separate them with a blank line or a line of ---.
+        // Each record must match a different DB row (found by KeyColumn when the record has it, else by its values).
+        // ColumnMap = {skip} checks only these values, not the API fields.
+        string? expectedMsg = null;
+        if (!string.IsNullOrWhiteSpace(tc.ExpectedValues) && string.IsNullOrWhiteSpace(tc.DbCheckQuery))
+        {
+            var blocks = new List<List<(string col, string value)>>(); var cur = new List<string>();
+            void Flush()
+            {
+                if (cur.Count > 0) { var e = DbRecordCheck.ParseExpected(string.Join("\n", cur), doc); if (e.Count > 0) blocks.Add(e); cur.Clear(); }
+            }
+            foreach (var line in tc.ExpectedValues.Split('\n'))
+            {
+                var t = line.Trim();
+                if (t.Length == 0 || t.All(ch => ch == '-')) Flush(); else cur.Add(t);
+            }
+            Flush();
+
+            if (blocks.Count > 0)
+            {
+                if (dbRows.Count == 0) issues.Add("ExpectedValues: DbQuery returned no row");
+                else
+                {
+                    string keyDB = (tc.KeyColumn ?? "").Trim(); var used = new HashSet<int>(); int okCount = 0;
+                    for (int b2 = 0; b2 < blocks.Count; b2++)
+                    {
+                        var exp = blocks[b2];
+                        var kv = keyDB.Length > 0 ? exp.FirstOrDefault(x => x.col.Equals(keyDB, StringComparison.OrdinalIgnoreCase)) : default;
+                        bool hasKey = kv.col != null;
+                        string label = blocks.Count > 1 ? $"Expected row {b2 + 1}" + (hasKey ? $" ({keyDB}={kv.value})" : "") : "ExpectedValues";
+                        int found = -1; List<string>? best = null;
+                        for (int i = 0; i < dbRows.Count && found < 0; i++)
+                        {
+                            if (used.Contains(i)) continue;
+                            if (hasKey && DbExcelComparer.Norm(dbRows[i].GetValueOrDefault(keyDB, "")) != DbExcelComparer.Norm(kv.value)) continue;
+                            var diffs = DbRecordCheck.CompareRow(dbRows[i], exp, dbCols, tc);
+                            if (diffs.Count == 0) found = i;
+                            else if (best == null || diffs.Count < best.Count) best = diffs;
+                        }
+                        if (found >= 0) { used.Add(found); okCount++; }
+                        else if (best != null) issues.Add($"{label}: {best.Count} value(s) differ: " + string.Join("; ", best.Take(10)) + (best.Count > 10 ? " …" : ""));
+                        else issues.Add($"{label}: no unused DB row" + (hasKey ? $" with {keyDB}={kv.value}" : ""));
+                    }
+                    if (okCount == blocks.Count)
+                        expectedMsg = blocks.Count == 1 ? $"ExpectedValues: all {blocks[0].Count} value(s) match"
+                            : $"ExpectedValues: {okCount} expected row(s) match ({dbRows.Count} DB row(s))";
+                }
+                if ((tc.ColumnMap ?? "").Trim().Equals("{skip}", StringComparison.OrdinalIgnoreCase)) return expectedMsg;
+            }
+        }
+
         // records = the list in the response (or the single object)
         if (doc == null) { issues.Add("API response is not JSON, cannot compare it with the database"); return null; }
         var recs = new List<JsonElement>(); JsonElement node = doc.RootElement;
@@ -231,6 +283,6 @@ public static class ApiDbComparer
             }
             if (rowOk) matched++;
         }
-        return $"DB: {dbRows.Count} row(s) vs {apiRows.Count} API record(s), {map.Count} column(s), {matched} fully match";
+        return $"DB: {dbRows.Count} row(s) vs {apiRows.Count} API record(s), {map.Count} column(s), {matched} fully match" + (expectedMsg != null ? " | " + expectedMsg : "");
     }
 }
