@@ -49,7 +49,11 @@ Node / Type `CsvDbCompare` (palette: "Compare CSV report vs database"). It reads
 - `KeyColumn`: DB column that identifies a record, so rows are paired by key. Blank = by order. `IgnoreColumns`: DB columns to skip.
 - Numbers compare as numbers (`Tolerance`), dates as dates, others as text (`CompareMode` Text / TextIgnoreCase forces text).
 - Reported: wrong values (CSV vs DB), records only in the CSV, rows only in the DB, columns not found in the CSV or the query.
+`ExpectedValues` (`CsvHeader=value`, one per line) checks values typed in the Excel row against the CSV records, with no `DbQuery` and no `ColumnMap` needed: leave `DbQuery` blank for a CSV-only check, or fill both. Several records: separate them with a blank line or `---`; each must match a different CSV record, and `KeyColumn` (a CSV header when `DbQuery` is blank) picks the record. `{any}`, `{notnull}`, `{null}` work. Sample case 6 in `TestCases_EndToEnd.xlsx`.
 Try it: import `Samples\\TestCases_CsvDbCompare.xlsx` (inline-values query, works on any SQL Server; cases 1 and 4 pass, cases 2 and 3 have deliberate errors). Format checks of the CSV itself stay in `ExcelVerify`.
+
+### End-to-end sample: console app -> file check -> CSV check -> DB compare
+Import `Samples\\TestCases_EndToEnd.xlsx` (Windows, start TestFlow from its folder). Case 1 runs `Samples\\SampleApp\\CreateOrders.cmd` (writes `Samples\\Output\\orders_report.csv`), case 2 checks the file, case 3 checks the CSV format against a spec, case 4 compares the CSV with DB values (pass), case 5 has one different value (fail demo). Case 6 checks fixed expected values in the CSV (no DB), cases 7-8 compare an Excel file (`Samples\\Orders_Expected.xlsx`) with the DB (`DbExcelCompare`; 7 passes, 8 has one different value).
 
 ### PDF files
 `ExcelVerify`, `HeaderTrailerVerify` and `FixedFileDbCompare` also read PDF files (`FileNamePattern` = `*.pdf`). The text layer is read by the app's own parser (`PdfTextReader.cs`, no extra library, no OCR):
@@ -78,6 +82,7 @@ column of every row with the Excel file in `ExpectedFile`. Excel headers must ma
 - `IgnoreColumns`: comma separated columns to skip (e.g. UpdatedAt,CreatedBy).
 - Numbers are compared as numbers (`Tolerance` = allowed difference), dates as dates, other values as text (`CompareMode` Text / TextIgnoreCase forces text).
 - Reported issues: wrong value (DB vs Excel), row only in DB, row only in Excel, column missing in Excel.
+Generated Excel + column map: leave `ExpectedFile` blank and fill `FileCheckFolder` + `FileNamePattern` (default `*.xlsx`, `FileWaitSeconds` to wait) to compare the newest generated file. `ColumnMap` (one `DbColumn=ExcelHeader` per line, blank = same names) pairs columns whose names differ; `KeyColumn` is then the DB column that identifies a row. Samples: cases 9-10 in `TestCases_EndToEnd.xlsx`.
 Try it: import `Samples\TestCases_DbExcelCompare.xlsx` (the query uses inline values, so it works on any SQL Server; row 3 has a deliberate error).
 
 ## Compare API response fields with database columns (names can differ)
@@ -88,6 +93,7 @@ Node / Type `ApiDbCompare` ("Compare API response vs database (many fields)").
 - `KeyColumn`: DB column that identifies a row (must be in `ColumnMap`), so rows are paired by key. Blank = by row order.
 - Numbers compare as numbers (`Tolerance`), dates as dates, others as text (`CompareMode` Text / TextIgnoreCase forces text).
 - Reported: wrong values, rows only in DB or only in the API, and API fields that are not found.
+`ApiCall` (REST request) also supports `ResponseCodePath` + `ExpectedResponseCode` (e.g. `status` = `SUCCESS`), `ResponseMessagePath` + `ExpectedResponseMessage`, `MessageMatch` and `ResponseCatalog`: when any of them is filled, the same checks as `ApiDbCompare` run (without a database query). Otherwise `ApiCall` behaves as before.
 In the Flow window, an API answer other than HTTP 200 also writes a line to the log (`API returned HTTP 400 for “name”: “message”`; FAIL when it was not the expected status, INFO when the test expects it), and every imported test case writes its result line to the log.
 When the HTTP status is not the expected one, the issue also shows what the API said: `ResponseMessagePath` if set, else a common error field (`message`, `error.message`, `errors[0].message`, `error`, `detail`, `title`...), else the first 300 characters of the body.
 `ExpectedValues` (`COLUMN=value`, one per line) is also checked against the rows of `DbQuery` when `DbCheckQuery` is blank: one row must hold every value (`{any}`, `{notnull}`, `{null}`, `{today}`, `{api:path}` work). `ColumnMap` = `{skip}` checks only these values.

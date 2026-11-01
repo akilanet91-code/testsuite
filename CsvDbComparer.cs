@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace TestFlow;
 
 /// <summary>Reads a generated CSV report (any delimiter, header line) and compares it with the database,
@@ -8,8 +10,11 @@ public static class CsvDbComparer
     public static async Task<(bool ok, string msg)> RunAsync(TestCase tc, CancellationToken ct)
     {
         static string Abs(string p) => string.IsNullOrWhiteSpace(p) || Path.IsPathRooted(p) ? p : Path.Combine(AppContext.BaseDirectory, p);
-        var (dbCs, dbErr) = AppConfig.GetDb(); if (dbErr != null) return (false, dbErr);
-        if (string.IsNullOrWhiteSpace(tc.DbQuery)) return (false, "DbQuery is empty");
+        bool useDb = !string.IsNullOrWhiteSpace(tc.DbQuery);
+        string dbCs = ""; string? dbErr = null;
+        if (useDb) (dbCs, dbErr) = AppConfig.GetDb();
+        if (dbErr != null) return (false, dbErr);
+        if (string.IsNullOrWhiteSpace(tc.DbQuery) && string.IsNullOrWhiteSpace(tc.ExpectedValues)) return (false, "Fill DbQuery (compare with the database), ExpectedValues (check values in the CSV), or both");
         var (map, mapErr) = ParseMap(tc.ColumnMap);
         if (mapErr != null) return (false, mapErr);
 
@@ -36,6 +41,17 @@ public static class CsvDbComparer
         if (csvRaw.Count == 0) return (false, $"{Path.GetFileName(file)} has no data rows" + (issues.Count > 0 ? ": " + string.Join("; ", issues) : ""));
         var csvRows = csvRaw.Select(r => new Dictionary<string, string>(r, StringComparer.OrdinalIgnoreCase)).ToList();
         var csvCols = csvRows[0].Keys.ToList();
+
+        // ExpectedValues: values typed in the Excel row (CsvHeader=value) checked against the CSV records, no column mapping needed
+        string? expectedMsg = null;
+        if (!string.IsNullOrWhiteSpace(tc.ExpectedValues))
+            expectedMsg = ExpectedRecords.Check(tc.ExpectedValues, csvRows, csvCols, tc, tc.KeyColumn, issues);
+        if (!useDb)
+        {
+            string only = $"{Path.GetFileName(file)}: {csvRows.Count} CSV record(s)";
+            return issues.Count == 0 ? (true, only + (expectedMsg != null ? ". " + expectedMsg : ""))
+                : (false, $"{only}. {issues.Count} issue(s): " + string.Join("; ", issues.Take(10)) + (issues.Count > 10 ? " …" : ""));
+        }
 
         // 3. database rows
         var dbCols = new List<string>(); var dbRows = new List<Dictionary<string, string>>();
@@ -106,11 +122,12 @@ public static class CsvDbComparer
             if (rowOk) matched++;
         }
         string summary = $"{Path.GetFileName(file)}: {csvRows.Count} CSV record(s), {dbRows.Count} DB row(s), {cols.Count} column(s) compared, {matched} record(s) fully match";
+        if (expectedMsg != null) summary += ". " + expectedMsg;
         return (issues.Count == 0, issues.Count == 0 ? summary : $"{summary}. {issues.Count} issue(s): " + string.Join("; ", issues.Take(10)) + (issues.Count > 10 ? " …" : ""));
     }
 
     /// <summary>One pair per line (or separated by ;):  DbColumn=CsvHeader.  Blank = same names.</summary>
-    static (List<(string Db, string Csv)>, string?) ParseMap(string text)
+    internal static (List<(string Db, string Csv)>, string?) ParseMap(string text)
     {
         var list = new List<(string, string)>();
         foreach (var raw in (text ?? "").Split(new[] { '\n', '\r', ';' }, StringSplitOptions.RemoveEmptyEntries))

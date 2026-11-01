@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 
@@ -165,6 +167,11 @@ public static class Runner
 
     static async Task<(bool, string)> CallApi(TestCase tc, CancellationToken ct)
     {
+        // response code / message columns filled: use the same checks as ApiDbCompare (they work without a database query)
+        if (!string.IsNullOrWhiteSpace(tc.ResponseCodePath) || !string.IsNullOrWhiteSpace(tc.ExpectedResponseCode)
+            || !string.IsNullOrWhiteSpace(tc.ResponseMessagePath) || !string.IsNullOrWhiteSpace(tc.ExpectedResponseMessage)
+            || !string.IsNullOrWhiteSpace(tc.ResponseCatalog))
+            return await ApiDbComparer.RunAsync(tc, ct);
         var (status, body) = await SendApi(tc, ct);
         int expected = tc.ExpectedStatusCode > 0 ? tc.ExpectedStatusCode : 200;
         bool okStatus = status == expected;

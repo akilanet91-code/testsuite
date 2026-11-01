@@ -1,5 +1,6 @@
 using System.Data.Common;
 using System.Globalization;
+using System.IO;
 using ClosedXML.Excel;
 
 namespace TestFlow;
@@ -12,8 +13,30 @@ public static class DbExcelComparer
         static string Abs(string p) => string.IsNullOrWhiteSpace(p) || Path.IsPathRooted(p) ? p : Path.Combine(AppContext.BaseDirectory, p);
         var (dbCs, dbErr) = AppConfig.GetDb(); if (dbErr != null) return (false, dbErr);
         if (string.IsNullOrWhiteSpace(tc.DbQuery)) return (false, "DbQuery is empty");
-        var file = Abs(tc.ExpectedFile);
-        if (!File.Exists(file)) return (false, "Excel file not found: " + file);
+        // the Excel file: ExpectedFile, or (when ExpectedFile is blank) the newest generated file matching FileCheckFolder + FileNamePattern
+        string file;
+        if (string.IsNullOrWhiteSpace(tc.ExpectedFile) && !string.IsNullOrWhiteSpace(tc.FileCheckFolder))
+        {
+            var folder = Abs(tc.FileCheckFolder);
+            var pattern = string.IsNullOrWhiteSpace(tc.FileNamePattern) ? "*.xlsx" : tc.FileNamePattern;
+            string? found = null; var deadline = DateTime.UtcNow.AddSeconds(Math.Max(0, tc.FileWaitSeconds));
+            while (true)
+            {
+                if (Directory.Exists(folder))
+                    found = Directory.EnumerateFiles(folder, pattern).Where(f => !Path.GetFileName(f).StartsWith("~$")).OrderByDescending(f => File.GetLastWriteTime(f)).FirstOrDefault();
+                if (found != null) break;
+                if (DateTime.UtcNow >= deadline) return (false, $"Excel file not found: {pattern} in {folder}");
+                await Task.Delay(500, ct);
+            }
+            file = found;
+        }
+        else
+        {
+            file = Abs(tc.ExpectedFile);
+            if (!File.Exists(file)) return (false, "Excel file not found: " + file);
+        }
+        var (map, mapErr) = CsvDbComparer.ParseMap(tc.ColumnMap);
+        if (mapErr != null) return (false, mapErr);
 
         // 1. Excel rows
         List<string> xlCols; List<Dictionary<string, string>> xlRows;
@@ -39,14 +62,33 @@ public static class DbExcelComparer
         if (dbRows.Count == 0 && xlRows.Count == 0) return (false, "Both the query and the Excel file have no rows");
 
         var issues = new List<string>();
-        var ignore = new HashSet<string>((tc.IgnoreColumns ?? "").Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()), StringComparer.OrdinalIgnoreCase);
-        var cols = dbCols.Where(c => !ignore.Contains(c)).ToList();
-        foreach (var c in cols.Where(c => !xlCols.Contains(c, StringComparer.OrdinalIgnoreCase)).ToList())
-        { issues.Add($"Column “{c}” is in the database result but not in the Excel file"); cols.Remove(c); }
+        var ignore = new HashSet<string>((tc.IgnoreColumns ?? "").Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()), StringComparer.OrdinalIgnoreCase);
+        // which DB column is compared with which Excel column: ColumnMap (DbColumn=ExcelHeader), blank = same names
+        var want = map.Count > 0 ? map.Select(m => (Db: m.Db, Xl: m.Csv)).ToList() : dbCols.Select(c => (Db: c, Xl: c)).ToList();
+        want = want.Where(w => !ignore.Contains(w.Db)).ToList();
+        var cols = new List<(string Db, string Xl)>();
+        foreach (var (db, xl) in want)
+        {
+            var dbHit = dbCols.FirstOrDefault(c => c.Equals(db, StringComparison.OrdinalIgnoreCase));
+            var xlHit = xlCols.FirstOrDefault(c => c.Equals(xl, StringComparison.OrdinalIgnoreCase));
+            if (dbHit == null) { issues.Add($"Column “{db}” is not in the query result (it returned: {string.Join(", ", dbCols)})"); continue; }
+            if (xlHit == null)
+            {
+                issues.Add(map.Count > 0 ? $"Excel column “{xl}” (for {db}) not found (the file has: {string.Join(", ", xlCols)})"
+                                         : $"Column “{db}” is in the database result but not in the Excel file");
+                continue;
+            }
+            cols.Add((dbHit, xlHit));
+        }
+        if (cols.Count == 0) return (false, "No column could be matched. " + string.Join("; ", issues));
 
         string key = (tc.KeyColumn ?? "").Trim();
-        if (key.Length > 0 && !dbCols.Contains(key, StringComparer.OrdinalIgnoreCase)) return (false, $"Key column “{key}” is not in the query result");
-        if (key.Length > 0 && !xlCols.Contains(key, StringComparer.OrdinalIgnoreCase)) return (false, $"Key column “{key}” is not in the Excel file");
+        (string Db, string Xl) keyCol = default;
+        if (key.Length > 0)
+        {
+            keyCol = cols.FirstOrDefault(c => c.Db.Equals(key, StringComparison.OrdinalIgnoreCase));
+            if (keyCol.Db == null) return (false, $"Key column “{key}” must be one of the compared DB columns");
+        }
 
         // 3. Pair rows: by key column, or by row order when no key is given
         var pairs = new List<(string label, Dictionary<string, string>? db, Dictionary<string, string>? xl)>();
@@ -55,16 +97,16 @@ public static class DbExcelComparer
             var xlByKey = new Dictionary<string, Dictionary<string, string>>();
             foreach (var r in xlRows)
             {
-                var k = Norm(r[key]);
-                if (!xlByKey.TryAdd(k, r)) issues.Add($"{key}={r[key]}: appears more than once in Excel");
+                var k = Norm(r[keyCol.Xl]);
+                if (!xlByKey.TryAdd(k, r)) issues.Add($"{key}={r[keyCol.Xl]}: appears more than once in Excel");
             }
             var seen = new HashSet<string>();
             foreach (var d in dbRows)
             {
-                var k = Norm(d[key]); seen.Add(k);
-                pairs.Add(($"{key}={d[key]}", d, xlByKey.GetValueOrDefault(k)));
+                var k = Norm(d[keyCol.Db]); seen.Add(k);
+                pairs.Add(($"{key}={d[keyCol.Db]}", d, xlByKey.GetValueOrDefault(k)));
             }
-            foreach (var (k, r) in xlByKey) if (!seen.Contains(k)) pairs.Add(($"{key}={r[key]}", null, r));
+            foreach (var (k, r) in xlByKey) if (!seen.Contains(k)) pairs.Add(($"{key}={r[keyCol.Xl]}", null, r));
         }
         else
         {
@@ -81,13 +123,13 @@ public static class DbExcelComparer
             bool rowOk = true;
             foreach (var c in cols)
             {
-                var (same, how) = Same(db[c], xl[c], tc.CompareMode, tc.Tolerance);
-                if (!same) { rowOk = false; issues.Add($"{label}: {c} DB “{db[c]}” ≠ Excel “{xl[c]}”"); }
+                var (same, how) = Same(db[c.Db], xl[c.Xl], tc.CompareMode, tc.Tolerance);
+                if (!same) { rowOk = false; issues.Add($"{label}: {c.Db} DB “{db[c.Db]}” ≠ Excel {c.Xl} “{xl[c.Xl]}”"); }
             }
             if (rowOk) matched++;
         }
 
-        string summary = $"{dbRows.Count} DB row(s), {xlRows.Count} Excel row(s), {cols.Count} column(s) compared, {matched} row(s) fully match";
+        string summary = $"{Path.GetFileName(file)}: {dbRows.Count} DB row(s), {xlRows.Count} Excel row(s), {cols.Count} column(s) compared, {matched} row(s) fully match";
         return (issues.Count == 0, issues.Count == 0 ? summary : $"{summary}. {issues.Count} issue(s): " + string.Join("; ", issues.Take(10)) + (issues.Count > 10 ? " …" : ""));
     }
 

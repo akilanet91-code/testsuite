@@ -193,7 +193,7 @@ public static class Kinds
     {
         ["CtrlMJob"]  = ("Control-M job", "⚙", new[] { "CtrlMJobName", "CtrlMArguments", "ExpectedExitCode" }),
         ["ExeRunner"] = ("Run EXE", "▶", new[] { "ExePath", "ExeArguments", "ExpectedExitCode", "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
-        ["ApiCall"]   = ("REST request", "🌐", new[] { "ApiUrl", "HttpMethod", "RequestBody", "RequestHeaders", "ExpectedStatusCode", "ExpectedResponseContains", "SaveAs" }),
+        ["ApiCall"]   = ("REST request", "🌐", new[] { "ApiUrl", "HttpMethod", "RequestBody", "RequestHeaders", "ExpectedStatusCode", "ExpectedResponseContains", "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog", "SaveAs" }),
         ["FileCheck"] = ("Check file", "📄", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
         ["ExcelVerify"] = ("Verify file vs spec (xlsx/csv/txt/pdf)", "✔", new[] { "FileCheckFolder", "FileNamePattern", "SpecFile", "Delimiter", "HasHeader" }),
         ["HeaderTrailerVerify"] = ("Verify header date + trailer count", "🗂", new[]
@@ -209,7 +209,7 @@ public static class Kinds
         }),
         ["DbExcelCompare"] = ("Compare database rows vs Excel", "🗃", new[]
         {
-            "DbQuery", "ExpectedFile", "ExpectedSheet", "KeyColumn", "IgnoreColumns", "CompareMode", "Tolerance"
+            "DbQuery", "ExpectedFile", "ExpectedSheet", "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "ColumnMap", "KeyColumn", "IgnoreColumns", "CompareMode", "Tolerance"
         }),
         ["DbRecordCheck"] = ("Check record in database (exists, values)", "🔎", new[] { "DbCheckQuery", "DbCheckExpect", "ExpectedValues", "CompareMode", "Tolerance" }),
         ["ApiDbCompare"] = ("Check API response: code, message, database", "🔀", new[]
@@ -227,7 +227,7 @@ public static class Kinds
         ["CsvDbCompare"] = ("Compare CSV report vs database", "📊", new[]
         {
             "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "Delimiter", "HasHeader",
-            "DbQuery", "ColumnMap", "KeyColumn", "IgnoreColumns", "CompareMode", "Tolerance"
+            "DbQuery", "ColumnMap", "KeyColumn", "IgnoreColumns", "CompareMode", "Tolerance", "ExpectedValues"
         }),
         ["TestSuite"] = ("Test suite (Excel)", "📋", Array.Empty<string>()),
     };
@@ -293,6 +293,7 @@ public static class Kinds
                                ("OUTPUT FILE CHECK (optional)", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }) },
         "ApiCall" => new[] { ("REQUEST", new[] { "ApiUrl", "HttpMethod", "RequestHeaders", "RequestBody" }),
                              ("EXPECTED RESPONSE", new[] { "ExpectedStatusCode", "ExpectedResponseContains" }),
+                             ("RESPONSE CODE / MESSAGE (optional)", new[] { "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog" }),
                              ("SAVE FOR LATER STEPS", new[] { "SaveAs" }) },
         "FileCheck" => new[] { ("FILE", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }) },
         "ExcelVerify" => new[] { ("GENERATED FILE", new[] { "FileCheckFolder", "FileNamePattern", "Delimiter", "HasHeader" }), ("SPECIFICATION", new[] { "SpecFile" }) },
@@ -315,6 +316,7 @@ public static class Kinds
             ("DATABASE", new[] { "DbQuery" }),
             ("COLUMN MAPPING", new[] { "ColumnMap", "KeyColumn", "IgnoreColumns" }),
             ("COMPARE", new[] { "CompareMode", "Tolerance" }),
+            ("EXPECTED VALUES (optional, CsvHeader=value)", new[] { "ExpectedValues" }),
         },
         "DbRecordCheck" => new[]
         {
@@ -334,7 +336,9 @@ public static class Kinds
         "DbExcelCompare" => new[]
         {
             ("DATABASE", new[] { "DbQuery" }),
-            ("EXCEL (EXPECTED DATA)", new[] { "ExpectedFile", "ExpectedSheet", "KeyColumn" }),
+            ("EXCEL (EXPECTED DATA: file, or the newest generated file below)", new[] { "ExpectedFile", "ExpectedSheet" }),
+            ("GENERATED EXCEL (when ExpectedFile is blank)", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
+            ("COLUMN MAPPING", new[] { "ColumnMap", "KeyColumn" }),
             ("COMPARE", new[] { "IgnoreColumns", "CompareMode", "Tolerance" }),
         },
         "ApiDbVerify" => new[]
