@@ -93,6 +93,10 @@ public class TestCase : Observable
     public string ApiRecordsPath { get; set; } = "";
     /// <summary>One pair per line: DbColumn=api.path  (e.g. CUST_NM=customer.name). Blank = columns and fields have the same names.</summary>
     public string ColumnMap { get; set; } = "";
+    /// <summary>Excel sheets: row number (1-based) holding the column headers. Blank = found automatically (title lines of a report are skipped).</summary>
+    public string HeaderRow { get; set; } = "";
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int HeaderRowNumber => int.TryParse((HeaderRow ?? "").Trim(), out var n) && n > 0 ? n : 0;
 
     // ── DbExcelCompare fields (all DB columns vs an Excel file) ──────────────
     /// <summary>Excel file holding the expected data (first row = column headers matching the query's column names).</summary>
@@ -195,7 +199,7 @@ public static class Kinds
         ["ExeRunner"] = ("Run EXE", "▶", new[] { "ExePath", "ExeArguments", "ExpectedExitCode", "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
         ["ApiCall"]   = ("REST request", "🌐", new[] { "ApiUrl", "HttpMethod", "RequestBody", "RequestHeaders", "ExpectedStatusCode", "ExpectedResponseContains", "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog", "SaveAs" }),
         ["FileCheck"] = ("Check file", "📄", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
-        ["ExcelVerify"] = ("Verify file vs spec (xlsx/csv/txt/pdf)", "✔", new[] { "FileCheckFolder", "FileNamePattern", "SpecFile", "Delimiter", "HasHeader" }),
+        ["ExcelVerify"] = ("Verify file vs spec (xlsx/csv/txt/pdf)", "✔", new[] { "FileCheckFolder", "FileNamePattern", "SpecFile", "Delimiter", "HasHeader", "HeaderRow" }),
         ["HeaderTrailerVerify"] = ("Verify header date + trailer count", "🗂", new[]
         {
             "FileCheckFolder", "FileNamePattern", "FileWaitSeconds",
@@ -209,7 +213,7 @@ public static class Kinds
         }),
         ["DbExcelCompare"] = ("Compare database rows vs Excel", "🗃", new[]
         {
-            "DbQuery", "ExpectedFile", "ExpectedSheet", "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "ColumnMap", "KeyColumn", "IgnoreColumns", "CompareMode", "Tolerance"
+            "DbQuery", "ExpectedFile", "ExpectedSheet", "HeaderRow", "FileCheckFolder", "FileNamePattern", "FileWaitSeconds", "ColumnMap", "KeyColumn", "IgnoreColumns", "CompareMode", "Tolerance"
         }),
         ["DbRecordCheck"] = ("Check record in database (exists, values)", "🔎", new[] { "DbCheckQuery", "DbCheckExpect", "ExpectedValues", "CompareMode", "Tolerance" }),
         ["ApiDbCompare"] = ("Check API response: code, message, database", "🔀", new[]
@@ -259,7 +263,7 @@ public static class Kinds
         "SaveAs" => "Save from response: NAME=json.path (one per line). Use later as {var:NAME}",
         "FileCheckFolder" => "Folder", "FileNamePattern" => "File name pattern", "FileWaitSeconds" => "Wait (seconds)",
         "SpecFile" => "Spec file (.xlsx)", "Delimiter" => "Delimiter (blank = auto-detect)", "HasHeader" => "Has header (Yes / No)",
-        "ExpectedFile" => "Excel file with expected data (.xlsx)", "ExpectedSheet" => "Sheet name (blank = first sheet)",
+        "ExpectedFile" => "Excel file with expected data (.xlsx)", "ExpectedSheet" => "Sheet name (blank = first sheet)", "HeaderRow" => "Header row number in the Excel sheet (blank = detect automatically; report title lines are skipped)",
         "KeyColumn" => "Key column to match rows (blank = by row order)", "IgnoreColumns" => "Columns to ignore (comma separated)",
         "FieldLayout" => "Field layout: DbColumn=start,length (one per line)",
         "SkipHeaderLines" => "Header lines to skip", "SkipTrailerLines" => "Trailer lines to skip",
@@ -296,7 +300,7 @@ public static class Kinds
                              ("RESPONSE CODE / MESSAGE (optional)", new[] { "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog" }),
                              ("SAVE FOR LATER STEPS", new[] { "SaveAs" }) },
         "FileCheck" => new[] { ("FILE", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }) },
-        "ExcelVerify" => new[] { ("GENERATED FILE", new[] { "FileCheckFolder", "FileNamePattern", "Delimiter", "HasHeader" }), ("SPECIFICATION", new[] { "SpecFile" }) },
+        "ExcelVerify" => new[] { ("GENERATED FILE", new[] { "FileCheckFolder", "FileNamePattern", "Delimiter", "HasHeader", "HeaderRow" }), ("SPECIFICATION", new[] { "SpecFile" }) },
         "HeaderTrailerVerify" => new[]
         {
             ("GENERATED FILE",   new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
@@ -336,7 +340,7 @@ public static class Kinds
         "DbExcelCompare" => new[]
         {
             ("DATABASE", new[] { "DbQuery" }),
-            ("EXCEL (EXPECTED DATA: file, or the newest generated file below)", new[] { "ExpectedFile", "ExpectedSheet" }),
+            ("EXCEL (EXPECTED DATA: file, or the newest generated file below)", new[] { "ExpectedFile", "ExpectedSheet", "HeaderRow" }),
             ("GENERATED EXCEL (when ExpectedFile is blank)", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
             ("COLUMN MAPPING", new[] { "ColumnMap", "KeyColumn" }),
             ("COMPARE", new[] { "IgnoreColumns", "CompareMode", "Tolerance" }),

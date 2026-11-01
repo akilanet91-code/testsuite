@@ -40,7 +40,7 @@ public static class DbExcelComparer
 
         // 1. Excel rows
         List<string> xlCols; List<Dictionary<string, string>> xlRows;
-        try { (xlCols, xlRows) = ReadExcel(file, tc.ExpectedSheet); }
+        try { (xlCols, xlRows) = ReadExcel(file, tc.ExpectedSheet, tc.HeaderRowNumber); }
         catch (Exception ex) { return (false, "Cannot read Excel: " + ex.Message); }
 
         // 2. Database rows (all columns)
@@ -133,22 +133,22 @@ public static class DbExcelComparer
         return (issues.Count == 0, issues.Count == 0 ? summary : $"{summary}. {issues.Count} issue(s): " + string.Join("; ", issues.Take(10)) + (issues.Count > 10 ? " …" : ""));
     }
 
-    internal static (List<string> cols, List<Dictionary<string, string>> rows) ReadExcel(string path, string sheet)
+    internal static (List<string> cols, List<Dictionary<string, string>> rows) ReadExcel(string path, string sheet, int headerRow = 0)
     {
-        if (XlsReader.IsXls(path)) return XlsReader.Read(path, sheet);   // Excel 97-2003 (.xls)
+        if (XlsReader.IsXls(path)) return XlsReader.Read(path, sheet, headerRow);   // Excel 97-2003 (.xls)
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var wb = new XLWorkbook(fs);
         var ws = !string.IsNullOrWhiteSpace(sheet) && wb.Worksheets.Contains(sheet.Trim()) ? wb.Worksheet(sheet.Trim()) : wb.Worksheets.First();
-        var header = ws.FirstRowUsed() ?? throw new InvalidDataException("Sheet is empty");
-        var heads = header.CellsUsed().ToDictionary(c => c.Address.ColumnNumber, c => c.GetString().Trim());
-        var rows = new List<Dictionary<string, string>>();
-        foreach (var r in ws.RowsUsed().Skip(1))
+        int maxR = ws.LastRowUsed()?.RowNumber() ?? 0, maxC = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+        if (maxR == 0) throw new InvalidDataException("Sheet is empty");
+        var grid = new List<string[]>();
+        for (int r = 1; r <= maxR; r++)
         {
-            var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (col, name) in heads) d[name] = CellText(r.Cell(col));
-            if (d.Values.Any(v => v.Length > 0)) rows.Add(d);
+            var row = new string[maxC];
+            for (int c = 1; c <= maxC; c++) row[c - 1] = CellText(ws.Cell(r, c));
+            grid.Add(row);
         }
-        return (heads.Values.ToList(), rows);
+        return SheetGrid.ToRows(grid, headerRow);   // header row: HeaderRow, or found automatically (report title lines are skipped)
     }
 
     static string CellText(IXLCell c)

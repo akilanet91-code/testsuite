@@ -74,7 +74,7 @@ public static class Runner
                 var file = Directory.Exists(folder)
                     ? Directory.EnumerateFiles(folder, pat).OrderByDescending(f => File.GetLastWriteTime(f)).FirstOrDefault() : null;
                 if (file == null) return (false, $"Generated file not found: {pat} in {folder}");
-                var issues = await Task.Run(() => SpecVerifier.Verify(spec, file, "Mapping", tc.Delimiter, !(tc.HasHeader.Trim().ToLowerInvariant() is "no" or "n" or "false" or "0")), ct);
+                var issues = await Task.Run(() => SpecVerifier.Verify(spec, file, "Mapping", tc.Delimiter, !(tc.HasHeader.Trim().ToLowerInvariant() is "no" or "n" or "false" or "0"), tc.HeaderRowNumber), ct);
                 return (issues.Count == 0,
                     issues.Count == 0 ? $"{Path.GetFileName(file)} matches the spec"
                     : $"{issues.Count} issue(s): " + string.Join("; ", issues.Take(10).Select(i => $"{i.Where}: {i.Message}")));

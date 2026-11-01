@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.Text;
+using ExcelDataReader;
 
 namespace TestFlow;
 
@@ -22,7 +23,7 @@ public static class XlsReader
         catch { return false; }
     }
 
-    public static (List<string> cols, List<Dictionary<string, string>> rows) Read(string path, string? sheet)
+    public static (List<string> cols, List<Dictionary<string, string>> rows) Read(string path, string? sheet, int headerRow = 0)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);   // .xls text uses legacy code pages
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -37,32 +38,21 @@ public static class XlsReader
             fs.Position = 0;
             using var again = ExcelReaderFactory.CreateBinaryReader(fs);
             for (int i = 0; i < Math.Max(0, idx); i++) again.NextResult();
-            return ReadSheet(again);
+            return SheetGrid.ToRows(Grid(again), headerRow);
         }
-        return ReadSheet(reader);
+        return SheetGrid.ToRows(Grid(reader), headerRow);
     }
 
-    static (List<string>, List<Dictionary<string, string>>) ReadSheet(IExcelDataReader reader)
+    static List<string[]> Grid(IExcelDataReader reader)
     {
-        Dictionary<int, string>? heads = null;
-        var rows = new List<Dictionary<string, string>>();
+        var grid = new List<string[]>();
         while (reader.Read())
         {
             var cells = new string[reader.FieldCount];
             for (int c = 0; c < cells.Length; c++) cells[c] = Text(reader.GetValue(c));
-            if (heads == null)
-            {
-                if (cells.All(t => t.Length == 0)) continue;           // header = first row with any text
-                heads = new Dictionary<int, string>();
-                for (int c = 0; c < cells.Length; c++) if (cells[c].Length > 0) heads[c] = cells[c];
-                continue;
-            }
-            var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (c, name) in heads) d[name] = c < cells.Length ? cells[c] : "";
-            if (d.Values.Any(v => v.Length > 0)) rows.Add(d);
+            grid.Add(cells);
         }
-        if (heads == null) throw new InvalidDataException("Sheet is empty");
-        return (heads.Values.ToList(), rows);
+        return grid;
     }
 
     static string Text(object? v) => v switch

@@ -58,11 +58,11 @@ public static class SpecVerifier
     static bool Yes(string s) => s.Trim().ToLowerInvariant() is "yes" or "y" or "true" or "1";
 
     /// <summary>Checks a generated Excel file against the spec workbook (sheet "Mapping").</summary>
-    public static List<Issue> Verify(string specPath, string generatedPath, string specSheet = "Mapping", string delimiter = "", bool hasHeader = true)
+    public static List<Issue> Verify(string specPath, string generatedPath, string specSheet = "Mapping", string delimiter = "", bool hasHeader = true, int headerRow = 0)
     {
         var issues = new List<Issue>();
         var spec = ExcelIO.ReadRows(specPath, specSheet);
-        var gen = GeneratedReader.Read(generatedPath, spec, delimiter, hasHeader, w => issues.Add(new("Format", w)));
+        var gen = GeneratedReader.Read(generatedPath, spec, delimiter, hasHeader, w => issues.Add(new("Format", w)), headerRow);
         if (spec.Count == 0) { issues.Add(new("Spec", "Spec sheet has no rows")); return issues; }
         if (gen.Count == 0) { issues.Add(new("File", "Generated file has no data rows")); return issues; }
 

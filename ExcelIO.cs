@@ -60,22 +60,22 @@ public static class ExcelIO
     }
 
     /// <summary>Reads any sheet as rows of header->value (formatted text). Works while the file is open in Excel.</summary>
-    public static List<Dictionary<string, string>> ReadRows(string path, string? sheet = null)
+    public static List<Dictionary<string, string>> ReadRows(string path, string? sheet = null, int headerRow = 0)
     {
-        if (XlsReader.IsXls(path)) return XlsReader.Read(path, sheet).rows;   // Excel 97-2003 (.xls)
+        if (XlsReader.IsXls(path)) return XlsReader.Read(path, sheet, headerRow).rows;   // Excel 97-2003 (.xls)
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var wb = new XLWorkbook(fs);
         var ws = sheet != null && wb.Worksheets.Contains(sheet) ? wb.Worksheet(sheet) : wb.Worksheets.First();
-        var header = ws.FirstRowUsed() ?? throw new InvalidDataException("Sheet is empty.");
-        var cols = header.CellsUsed().ToDictionary(c => c.Address.ColumnNumber, c => c.GetString().Trim());
-        var rows = new List<Dictionary<string, string>>();
-        foreach (var r in ws.RowsUsed().Skip(1))
+        int maxR = ws.LastRowUsed()?.RowNumber() ?? 0, maxC = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+        if (maxR == 0) throw new InvalidDataException("Sheet is empty.");
+        var grid = new List<string[]>();
+        for (int r = 1; r <= maxR; r++)
         {
-            var d = new Dictionary<string, string>();
-            foreach (var (col, name) in cols) d[name] = r.Cell(col).GetFormattedString().Trim();
-            if (d.Values.Any(v => v.Length > 0)) rows.Add(d);
+            var row = new string[maxC];
+            for (int c = 1; c <= maxC; c++) row[c - 1] = ws.Cell(r, c).GetFormattedString().Trim();
+            grid.Add(row);
         }
-        return rows;
+        return SheetGrid.ToRows(grid, headerRow).rows;   // report title lines above the header are skipped
     }
 
     public static void SaveTemplate(string path)

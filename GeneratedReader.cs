@@ -11,10 +11,10 @@ public static class GeneratedReader
     static readonly string[] Candidates = { ",", "\t", "|", ";", "~", "^", ":", "#", " " };
 
     public static List<Dictionary<string, string>> Read(string path, List<Dictionary<string, string>> spec,
-        string delimiter = "", bool hasHeader = true, Action<string>? warn = null)
+        string delimiter = "", bool hasHeader = true, Action<string>? warn = null, int headerRow = 0)
     {
         var ext = Path.GetExtension(path).ToLowerInvariant();
-        if (ext is ".xlsx" or ".xlsm" or ".xls") return ExcelIO.ReadRows(path);
+        if (ext is ".xlsx" or ".xlsm" or ".xls") return ExcelIO.ReadRows(path, null, headerRow);
 
         bool fixedWidth = spec.Count > 0 && spec.All(r => IsNum(r, "Start") && IsNum(r, "Length"));
         List<string> lines;
