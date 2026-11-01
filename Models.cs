@@ -368,7 +368,7 @@ public static class AppState
     /// <summary>Asks for an Excel file and loads it into <paramref name="target"/> (replacing only that list). Returns the file name or null.</summary>
     public static string? ImportInto(ObservableCollection<TestCase> target)
     {
-        var dlg = new OpenFileDialog { Filter = "Excel workbook (*.xlsx)|*.xlsx", Title = "Import test cases" };
+        var dlg = new OpenFileDialog { Filter = "Excel workbook (*.xlsx;*.xls)|*.xlsx;*.xls", Title = "Import test cases" };
         if (dlg.ShowDialog() != true) return null;
         try
         {

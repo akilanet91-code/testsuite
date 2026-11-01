@@ -82,7 +82,7 @@ column of every row with the Excel file in `ExpectedFile`. Excel headers must ma
 - `IgnoreColumns`: comma separated columns to skip (e.g. UpdatedAt,CreatedBy).
 - Numbers are compared as numbers (`Tolerance` = allowed difference), dates as dates, other values as text (`CompareMode` Text / TextIgnoreCase forces text).
 - Reported issues: wrong value (DB vs Excel), row only in DB, row only in Excel, column missing in Excel.
-Generated Excel + column map: leave `ExpectedFile` blank and fill `FileCheckFolder` + `FileNamePattern` (default `*.xlsx`, `FileWaitSeconds` to wait) to compare the newest generated file. `ColumnMap` (one `DbColumn=ExcelHeader` per line, blank = same names) pairs columns whose names differ; `KeyColumn` is then the DB column that identifies a row. Samples: cases 9-10 in `TestCases_EndToEnd.xlsx`.
+Excel 97-2003 (`.xls`) files are read too (expected data, generated reports, the response catalog and imported test cases) through ExcelDataReader (MIT licence, pure managed code, works offline; see `LocalPackages\\README.txt` to build without internet); `.xlsx` and `.xlsm` work as before. Generated Excel + column map: leave `ExpectedFile` blank and fill `FileCheckFolder` + `FileNamePattern` (default `*.xlsx`, `FileWaitSeconds` to wait) to compare the newest generated file. `ColumnMap` (one `DbColumn=ExcelHeader` per line, blank = same names) pairs columns whose names differ; `KeyColumn` is then the DB column that identifies a row. Samples: cases 9-10 in `TestCases_EndToEnd.xlsx`.
 Try it: import `Samples\TestCases_DbExcelCompare.xlsx` (the query uses inline values, so it works on any SQL Server; row 3 has a deliberate error).
 
 ## Compare API response fields with database columns (names can differ)
@@ -213,3 +213,6 @@ Use it later as `{var:refNo}` in ApiUrl, RequestBody, RequestHeaders, DbQuery, D
 - A step that uses `{var:x}` before anything saved it fails with a clear message (it never runs with an empty value).
 - Saving happens only on a 2xx response; a non-2xx response fails on its status as usual.
 - Try it: import Samples\TestCases_ChainedApi.xlsx (point the URLs at your API). Run steps in order with Run All.
+
+## Third-party licences
+ClosedXML (MIT), ExcelDataReader (MIT). `.xls` reading needs no internet at run time; only the first restore of the packages does (or copy the `.nupkg` files into `LocalPackages`).

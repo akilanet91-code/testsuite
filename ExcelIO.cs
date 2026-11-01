@@ -11,6 +11,26 @@ public static class ExcelIO
     public static List<TestCase> Load(string path)
     {
         var list = new List<TestCase>();
+        if (XlsReader.IsXls(path))   // Excel 97-2003 (.xls): same header-name -> property mapping
+        {
+            var (_, xrows) = XlsReader.Read(path, null);
+            foreach (var xr in xrows)
+            {
+                var tcx = new TestCase();
+                foreach (var (name, val) in xr)
+                {
+                    if (Skip.Contains(name) || val.Length == 0) continue;
+                    var px = typeof(TestCase).GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                    if (px == null || !px.CanWrite) continue;
+                    if (px.PropertyType == typeof(int)) px.SetValue(tcx, int.TryParse(val, out var n) ? n : 0);
+                    else if (px.PropertyType == typeof(string)) px.SetValue(tcx, val);
+                }
+                if (string.IsNullOrWhiteSpace(tcx.Name)) continue;
+                if (tcx.Id == 0) tcx.Id = list.Count + 1;
+                list.Add(tcx);
+            }
+            return list;
+        }
         using var wb = new XLWorkbook(path);
         var ws = wb.Worksheets.First();
         var header = ws.FirstRowUsed() ?? throw new InvalidDataException("The sheet is empty.");
@@ -42,6 +62,7 @@ public static class ExcelIO
     /// <summary>Reads any sheet as rows of header->value (formatted text). Works while the file is open in Excel.</summary>
     public static List<Dictionary<string, string>> ReadRows(string path, string? sheet = null)
     {
+        if (XlsReader.IsXls(path)) return XlsReader.Read(path, sheet).rows;   // Excel 97-2003 (.xls)
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var wb = new XLWorkbook(fs);
         var ws = sheet != null && wb.Worksheets.Contains(sheet) ? wb.Worksheet(sheet) : wb.Worksheets.First();

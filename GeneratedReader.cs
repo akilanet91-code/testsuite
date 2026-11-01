@@ -14,7 +14,7 @@ public static class GeneratedReader
         string delimiter = "", bool hasHeader = true, Action<string>? warn = null)
     {
         var ext = Path.GetExtension(path).ToLowerInvariant();
-        if (ext is ".xlsx" or ".xlsm") return ExcelIO.ReadRows(path);
+        if (ext is ".xlsx" or ".xlsm" or ".xls") return ExcelIO.ReadRows(path);
 
         bool fixedWidth = spec.Count > 0 && spec.All(r => IsNum(r, "Start") && IsNum(r, "Length"));
         List<string> lines;

@@ -18,7 +18,7 @@ public static class DbExcelComparer
         if (string.IsNullOrWhiteSpace(tc.ExpectedFile) && !string.IsNullOrWhiteSpace(tc.FileCheckFolder))
         {
             var folder = Abs(tc.FileCheckFolder);
-            var pattern = string.IsNullOrWhiteSpace(tc.FileNamePattern) ? "*.xlsx" : tc.FileNamePattern;
+            var pattern = string.IsNullOrWhiteSpace(tc.FileNamePattern) ? "*.xls*" : tc.FileNamePattern;
             string? found = null; var deadline = DateTime.UtcNow.AddSeconds(Math.Max(0, tc.FileWaitSeconds));
             while (true)
             {
@@ -135,6 +135,7 @@ public static class DbExcelComparer
 
     internal static (List<string> cols, List<Dictionary<string, string>> rows) ReadExcel(string path, string sheet)
     {
+        if (XlsReader.IsXls(path)) return XlsReader.Read(path, sheet);   // Excel 97-2003 (.xls)
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var wb = new XLWorkbook(fs);
         var ws = !string.IsNullOrWhiteSpace(sheet) && wb.Worksheets.Contains(sheet.Trim()) ? wb.Worksheet(sheet.Trim()) : wb.Worksheets.First();
