@@ -8,7 +8,7 @@ namespace TestFlow;
 /// compares every record of the file with the database rows, field by field.</summary>
 public static class FixedFileDbComparer
 {
-    sealed record Field(string Column, int Start, int Length, int Decimals, string DateFormat);
+    internal sealed record Field(string Column, int Start, int Length, int Decimals, string DateFormat);
 
     public static async Task<(bool ok, string msg)> RunAsync(TestCase tc, CancellationToken ct)
     {
@@ -107,7 +107,7 @@ public static class FixedFileDbComparer
     }
 
     /// <summary>One field per line (or separated by ;):  DbColumn=start,length  [,dec:N] [,date:yyyyMMdd]   (start is 1-based)</summary>
-    static (List<Field>, string?) ParseLayout(string text)
+    internal static (List<Field>, string?) ParseLayout(string text)
     {
         var list = new List<Field>();
         foreach (var raw in (text ?? "").Split(new[] { '\n', '\r', ';' }, StringSplitOptions.RemoveEmptyEntries))
@@ -130,7 +130,7 @@ public static class FixedFileDbComparer
         return list.Count == 0 ? (list, "FieldLayout is empty (e.g. ACCT_ID=1,6)") : (list, null);
     }
 
-    static string Cut(string line, Field f)
+    internal static string Cut(string line, Field f)
     {
         int i = f.Start - 1;
         string s = i >= line.Length ? "" : line.Substring(i, Math.Min(f.Length, line.Length - i));

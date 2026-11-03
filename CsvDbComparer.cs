@@ -96,12 +96,28 @@ public static class CsvDbComparer
         var pairs = new List<(string label, Dictionary<string, string>? csv, Dictionary<string, string>? db)>();
         if (key.Length > 0)
         {
-            var byKey = new Dictionary<string, Dictionary<string, string>>();
+            // Duplicate keys are allowed: the 1st DB row with a key is paired with the 1st CSV record with that key, the 2nd with the 2nd, ...
+            // (so keep the same order on both sides, e.g. ORDER BY in the query). Records left over on either side are reported.
+            var byKey = new Dictionary<string, Queue<Dictionary<string, string>>>();
             foreach (var r in csvRows)
-                if (!byKey.TryAdd(DbExcelComparer.Norm(r[keyCol.Csv]), r)) issues.Add($"{key}={r[keyCol.Csv]}: appears more than once in the CSV");
-            var seen = new HashSet<string>();
-            foreach (var d in dbRows) { var k = DbExcelComparer.Norm(d[keyCol.Db]); seen.Add(k); pairs.Add(($"{key}={d[keyCol.Db]}", byKey.GetValueOrDefault(k), d)); }
-            foreach (var (k, r) in byKey) if (!seen.Contains(k)) pairs.Add(($"{key}={r[keyCol.Csv]}", r, null));
+            {
+                var k = DbExcelComparer.Norm(r[keyCol.Csv]);
+                if (!byKey.TryGetValue(k, out var q)) byKey[k] = q = new Queue<Dictionary<string, string>>();
+                q.Enqueue(r);
+            }
+            var nth = new Dictionary<string, int>();
+            foreach (var d in dbRows)
+            {
+                var k = DbExcelComparer.Norm(d[keyCol.Db]);
+                nth[k] = nth.GetValueOrDefault(k) + 1;
+                var csvRec = byKey.TryGetValue(k, out var q) && q.Count > 0 ? q.Dequeue() : null;
+                pairs.Add(($"{key}={d[keyCol.Db]}" + (nth[k] > 1 ? $" (#{nth[k]})" : ""), csvRec, d));
+            }
+            foreach (var (k, q) in byKey)
+            {
+                int n = nth.GetValueOrDefault(k);
+                foreach (var r in q) pairs.Add(($"{key}={r[keyCol.Csv]}" + (++n > 1 ? $" (#{n})" : ""), r, null));
+            }
         }
         else
             for (int i = 0; i < Math.Max(csvRows.Count, dbRows.Count); i++)

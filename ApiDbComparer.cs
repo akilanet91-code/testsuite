@@ -203,25 +203,25 @@ public static class ApiDbComparer
                 if (dbRows.Count == 0) issues.Add("ExpectedValues: DbQuery returned no row");
                 else
                 {
-                    string Dbkey = (tc.KeyColumn ?? "").Trim(); var used = new HashSet<int>(); int okCount = 0;
+                    string DBkey = (tc.KeyColumn ?? "").Trim(); var used = new HashSet<int>(); int okCount = 0;
                     for (int b2 = 0; b2 < blocks.Count; b2++)
                     {
                         var exp = blocks[b2];
-                        var kv = Dbkey.Length > 0 ? exp.FirstOrDefault(x => x.col.Equals(Dbkey, StringComparison.OrdinalIgnoreCase)) : default;
+                        var kv = DBkey.Length > 0 ? exp.FirstOrDefault(x => x.col.Equals(DBkey, StringComparison.OrdinalIgnoreCase)) : default;
                         bool hasKey = kv.col != null;
-                        string label = blocks.Count > 1 ? $"Expected row {b2 + 1}" + (hasKey ? $" ({Dbkey}={kv.value})" : "") : "ExpectedValues";
+                        string label = blocks.Count > 1 ? $"Expected row {b2 + 1}" + (hasKey ? $" ({DBkey}={kv.value})" : "") : "ExpectedValues";
                         int found = -1; List<string>? best = null;
                         for (int i = 0; i < dbRows.Count && found < 0; i++)
                         {
                             if (used.Contains(i)) continue;
-                            if (hasKey && DbExcelComparer.Norm(dbRows[i].GetValueOrDefault(Dbkey, "")) != DbExcelComparer.Norm(kv.value)) continue;
+                            if (hasKey && DbExcelComparer.Norm(dbRows[i].GetValueOrDefault(DBkey, "")) != DbExcelComparer.Norm(kv.value)) continue;
                             var diffs = DbRecordCheck.CompareRow(dbRows[i], exp, dbCols, tc);
                             if (diffs.Count == 0) found = i;
                             else if (best == null || diffs.Count < best.Count) best = diffs;
                         }
                         if (found >= 0) { used.Add(found); okCount++; }
                         else if (best != null) issues.Add($"{label}: {best.Count} value(s) differ: " + string.Join("; ", best.Take(10)) + (best.Count > 10 ? " …" : ""));
-                        else issues.Add($"{label}: no unused DB row" + (hasKey ? $" with {Dbkey}={kv.value}" : ""));
+                        else issues.Add($"{label}: no unused DB row" + (hasKey ? $" with {DBkey}={kv.value}" : ""));
                     }
                     if (okCount == blocks.Count)
                         expectedMsg = blocks.Count == 1 ? $"ExpectedValues: all {blocks[0].Count} value(s) match"
@@ -271,12 +271,28 @@ public static class ApiDbComparer
         var pairs = new List<(string label, Dictionary<string, string>? db, Dictionary<string, string?>? api)>();
         if (key.Length > 0)
         {
-            var byKey = new Dictionary<string, Dictionary<string, string?>>();
+            // Duplicate keys are allowed: the 1st DB row with a key is paired with the 1st API record with that key, the 2nd with the 2nd, ...
+            // (so keep the same order on both sides, e.g. ORDER BY in the query). Records left over on either side are reported.
+            var byKey = new Dictionary<string, Queue<Dictionary<string, string?>>>();
             foreach (var a in apiRows)
-                if (!byKey.TryAdd(DbExcelComparer.Norm(a[key] ?? ""), a)) issues.Add($"{key}={a[key]}: appears more than once in the API response");
-            var seen = new HashSet<string>();
-            foreach (var d in dbRows) { var k = DbExcelComparer.Norm(d[key]); seen.Add(k); pairs.Add(($"{key}={d[key]}", d, byKey.GetValueOrDefault(k))); }
-            foreach (var (k, a) in byKey) if (!seen.Contains(k)) pairs.Add(($"{key}={a[key]}", null, a));
+            {
+                var k = DbExcelComparer.Norm(a[key] ?? "");
+                if (!byKey.TryGetValue(k, out var q)) byKey[k] = q = new Queue<Dictionary<string, string?>>();
+                q.Enqueue(a);
+            }
+            var nth = new Dictionary<string, int>();
+            foreach (var d in dbRows)
+            {
+                var k = DbExcelComparer.Norm(d[key]);
+                nth[k] = nth.GetValueOrDefault(k) + 1;
+                var apiRec = byKey.TryGetValue(k, out var q) && q.Count > 0 ? q.Dequeue() : null;
+                pairs.Add(($"{key}={d[key]}" + (nth[k] > 1 ? $" (#{nth[k]})" : ""), d, apiRec));
+            }
+            foreach (var (k, q) in byKey)
+            {
+                int n = nth.GetValueOrDefault(k);
+                foreach (var a in q) pairs.Add(($"{key}={a[key]}" + (++n > 1 ? $" (#{n})" : ""), null, a));
+            }
         }
         else
             for (int i = 0; i < Math.Max(dbRows.Count, apiRows.Count); i++)
