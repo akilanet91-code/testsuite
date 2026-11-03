@@ -203,25 +203,25 @@ public static class ApiDbComparer
                 if (dbRows.Count == 0) issues.Add("ExpectedValues: DbQuery returned no row");
                 else
                 {
-                    string DBkey = (tc.KeyColumn ?? "").Trim(); var used = new HashSet<int>(); int okCount = 0;
+                    string Dbkey = (tc.KeyColumn ?? "").Trim(); var used = new HashSet<int>(); int okCount = 0;
                     for (int b2 = 0; b2 < blocks.Count; b2++)
                     {
                         var exp = blocks[b2];
-                        var kv = DBkey.Length > 0 ? exp.FirstOrDefault(x => x.col.Equals(DBkey, StringComparison.OrdinalIgnoreCase)) : default;
+                        var kv = Dbkey.Length > 0 ? exp.FirstOrDefault(x => x.col.Equals(Dbkey, StringComparison.OrdinalIgnoreCase)) : default;
                         bool hasKey = kv.col != null;
-                        string label = blocks.Count > 1 ? $"Expected row {b2 + 1}" + (hasKey ? $" ({DBkey}={kv.value})" : "") : "ExpectedValues";
+                        string label = blocks.Count > 1 ? $"Expected row {b2 + 1}" + (hasKey ? $" ({Dbkey}={kv.value})" : "") : "ExpectedValues";
                         int found = -1; List<string>? best = null;
                         for (int i = 0; i < dbRows.Count && found < 0; i++)
                         {
                             if (used.Contains(i)) continue;
-                            if (hasKey && DbExcelComparer.Norm(dbRows[i].GetValueOrDefault(DBkey, "")) != DbExcelComparer.Norm(kv.value)) continue;
+                            if (hasKey && DbExcelComparer.Norm(dbRows[i].GetValueOrDefault(Dbkey, "")) != DbExcelComparer.Norm(kv.value)) continue;
                             var diffs = DbRecordCheck.CompareRow(dbRows[i], exp, dbCols, tc);
                             if (diffs.Count == 0) found = i;
                             else if (best == null || diffs.Count < best.Count) best = diffs;
                         }
                         if (found >= 0) { used.Add(found); okCount++; }
                         else if (best != null) issues.Add($"{label}: {best.Count} value(s) differ: " + string.Join("; ", best.Take(10)) + (best.Count > 10 ? " …" : ""));
-                        else issues.Add($"{label}: no unused DB row" + (hasKey ? $" with {DBkey}={kv.value}" : ""));
+                        else issues.Add($"{label}: no unused DB row" + (hasKey ? $" with {Dbkey}={kv.value}" : ""));
                     }
                     if (okCount == blocks.Count)
                         expectedMsg = blocks.Count == 1 ? $"ExpectedValues: all {blocks[0].Count} value(s) match"

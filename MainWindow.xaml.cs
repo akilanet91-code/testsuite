@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.IO;
 using System.Text;
 using System.Windows;
 using Microsoft.Win32;
@@ -9,7 +10,6 @@ namespace TestFlow;
 public partial class MainWindow : Window
 {
     CancellationTokenSource? _cts;
-    FlowWindow? _flow;
     ObservableCollection<TestCase> _cases = AppState.Cases;
     FlowNode? _node;
 
@@ -18,6 +18,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         TestCase.StatusChanged += RefreshStats;
         Bind(AppState.Cases, null);
+        Closed += (_, _) => { TestCase.StatusChanged -= RefreshStats; _cases.CollectionChanged -= OnChanged; _cts?.Cancel(); };
     }
 
     /// <summary>Show the test cases of one flow node (or the default list when node is null).</summary>
@@ -71,12 +72,6 @@ public partial class MainWindow : Window
             MessageBox.Show(msg, "CSV → Test Cases");
         }
         catch (Exception ex) { MessageBox.Show(ex.Message, "CSV → Test Cases", MessageBoxButton.OK, MessageBoxImage.Warning); }
-    }
-
-    void OpenFlow_Click(object s, RoutedEventArgs e)
-    {
-        if (_flow == null || !_flow.IsLoaded) { _flow = new FlowWindow(); _flow.Show(); }
-        else _flow.Activate();
     }
 
     async void RunAll_Click(object s, RoutedEventArgs e) => await RunList(_cases.ToList());

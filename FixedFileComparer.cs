@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace TestFlow;
 
 /// <summary>Compares two fixed-position files field by field: the EXPECTED file (ExpectedFile) and the ACTUAL file (the newest

@@ -1,7 +1,7 @@
 <Window x:Class="TestFlow.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="TestFlow – Test Runner" Height="640" Width="1200"
+        Title="TestFlow – Test cases" Height="640" Width="1200"
         Background="{StaticResource Bg}" Foreground="{StaticResource Tx}">
   <Grid>
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -14,7 +14,6 @@
         <Button Content="🧾 CSV → Test Cases" Click="CsvGen_Click"/>
         <Button Content="▶ Run All" Background="{StaticResource Ac}" Click="RunAll_Click"/>
         <Button Content="▶ Run Selected" Click="RunSelected_Click"/>
-        <Button Content="🔀 Open Flow" Click="OpenFlow_Click"/>
         <Button x:Name="StopBtn" Content="■ Stop" IsEnabled="False" Click="Stop_Click"/>
         <Button Content="Export Report" Click="Export_Click"/>
       </WrapPanel>

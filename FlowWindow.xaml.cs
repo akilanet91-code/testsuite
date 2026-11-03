@@ -24,6 +24,16 @@ public partial class FlowWindow : Window
     static Brush B(string hex) => (Brush)new BrushConverter().ConvertFromString(hex)!;
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
+    MainWindow? _casesWindow;
+
+    /// <summary>The test case list (upload, run all/selected, details, CSV generator) is a sub window of this main window.</summary>
+    void TestCases_Click(object s, RoutedEventArgs e)
+    {
+        if (sel != null) { OpenRunner(sel); return; }   // a node is selected: open its own test case window
+        if (_casesWindow == null || !_casesWindow.IsLoaded) { _casesWindow = new MainWindow { Owner = this }; _casesWindow.Show(); }
+        else { if (_casesWindow.WindowState == WindowState.Minimized) _casesWindow.WindowState = WindowState.Normal; _casesWindow.Activate(); }
+    }
+
     public FlowWindow()
     {
         InitializeComponent();
@@ -42,20 +52,47 @@ public partial class FlowWindow : Window
         Log("INFO", "Ready. Click a node to edit it; use Advanced > Import Excel to give that node its own test cases.");
         AppState.CasesImported += OnImported;
         Runner.LogSink = (level, msg) => Dispatcher.Invoke(() => Log(level, msg));
-        Closed += (_, _) => Runner.LogSink = null;
+        Closed += (_, _) => { Runner.LogSink = null; CloseAllRunners(); };
         Closed += (_, _) => AppState.CasesImported -= OnImported;
     }
 
     void OnImported() => RefreshAll();
 
-    /// <summary>Show this node's test scenarios in the Test Runner window.</summary>
+    readonly Dictionary<int, MainWindow> runners = new();
+
+    /// <summary>Open (or bring to front) the test case window of this node. Every node has its own window.</summary>
     void OpenRunner(FlowNode n)
     {
-        if (Application.Current.MainWindow is not MainWindow mw) return;
-        if (!mw.IsVisible) mw.Show();
-        if (mw.WindowState == WindowState.Minimized) mw.WindowState = WindowState.Normal;
-        mw.Bind(n.Cases, n);
-        mw.Topmost = true; mw.Topmost = false;   // bring to front without stealing focus
+        if (!runners.TryGetValue(n.Id, out var w) || !w.IsLoaded)
+        {
+            w = new MainWindow { Owner = this };
+            w.Bind(n.Cases, n);
+            int id = n.Id;
+            w.Closed += (_, _) => { if (runners.TryGetValue(id, out var cur) && cur == w) runners.Remove(id); };
+            // cascade so several node windows do not sit exactly on top of each other
+            int k = runners.Count;
+            w.WindowStartupLocation = WindowStartupLocation.Manual;
+            w.Left = Left + 60 + 30 * (k % 6); w.Top = Top + 80 + 30 * (k % 6);
+            runners[n.Id] = w;
+            w.Show();
+        }
+        else
+        {
+            if (w.WindowState == WindowState.Minimized) w.WindowState = WindowState.Normal;
+            w.Bind(n.Cases, n);   // refresh title / counts
+            w.Activate();
+        }
+    }
+
+    void CloseRunner(FlowNode n)
+    {
+        if (runners.Remove(n.Id, out var w)) w.Close();
+    }
+
+    void CloseAllRunners()
+    {
+        foreach (var w in runners.Values.ToList()) w.Close();
+        runners.Clear();
     }
 
     void ImportForNode(FlowNode n)
@@ -120,7 +157,8 @@ public partial class FlowWindow : Window
         var menu = new ContextMenu();
         var del = new MenuItem { Header = "Delete node" }; del.Click += (_, _) => RemoveNode(n);
         var dis = new MenuItem { Header = "Remove connections" }; dis.Click += (_, _) => { doc.Edges.RemoveAll(e => e.From == n.Id || e.To == n.Id); DrawEdges(); };
-        menu.Items.Add(del); menu.Items.Add(dis); v.Box.ContextMenu = menu;
+        var open = new MenuItem { Header = "Open test cases" }; open.Click += (_, _) => OpenRunner(n);
+        menu.Items.Add(open); menu.Items.Add(new Separator()); menu.Items.Add(del); menu.Items.Add(dis); v.Box.ContextMenu = menu;
 
         v.Box.MouseLeftButtonDown += (_, e) => NodeDown(n, e);
         v.Box.MouseMove += (_, e) => NodeMove(n, e);
@@ -170,6 +208,7 @@ public partial class FlowWindow : Window
             }
             RefreshAll(); e.Handled = true; return;
         }
+        if (e.ClickCount == 2) { Select(n); OpenRunner(n); drag = null; e.Handled = true; return; }   // double-click opens the node's test cases
         drag = n; moved = false; dragStart = e.GetPosition(Surface);
         dragOff = new Point(dragStart.X - n.X, dragStart.Y - n.Y);
         views[n.Id].Box.CaptureMouse(); e.Handled = true;
@@ -211,12 +250,13 @@ public partial class FlowWindow : Window
     {
         doc.Edges.RemoveAll(e => e.From == n.Id || e.To == n.Id);
         Surface.Children.Remove(views[n.Id].Box); views.Remove(n.Id); doc.Nodes.Remove(n);
+        CloseRunner(n);
         if (sel == n) CloseSide();
         DrawEdges();
     }
 
     // ---------- settings panel ----------
-    void Select(FlowNode n) { sel = n; Side.Visibility = Visibility.Visible; BuildSide(n); RefreshAll(); OpenRunner(n); }
+    void Select(FlowNode n) { sel = n; Side.Visibility = Visibility.Visible; BuildSide(n); RefreshAll(); }
     void CloseSide() { sel = null; Side.Visibility = Visibility.Collapsed; RefreshAll(); }
     void CloseSide_Click(object s, RoutedEventArgs e) => CloseSide();
     void DeleteNode_Click(object s, RoutedEventArgs e) { if (sel != null) RemoveNode(sel); }
@@ -277,7 +317,7 @@ public partial class FlowWindow : Window
         var imp = new Button { Content = "⬆ Import Excel test cases…", Margin = new Thickness(0) };
         imp.Click += (_, _) => { ImportForNode(n); info.Text = n.Cases.Count > 0 ? $"{n.ExcelFile} – {n.Cases.Count} rows" : "No Excel imported yet"; };
         AdvPanel.Children.Add(imp);
-        var show = new Button { Content = "📊 Show in Test Runner", Margin = new Thickness(0, 8, 0, 0) };
+        var show = new Button { Content = "📊 Open test cases window", Margin = new Thickness(0, 8, 0, 0) };
         show.Click += (_, _) => OpenRunner(n);
         AdvPanel.Children.Add(show);
     }
@@ -301,7 +341,7 @@ public partial class FlowWindow : Window
         try
         {
             var d = JsonSerializer.Deserialize<FlowDoc>(File.ReadAllText(dlg.FileName)) ?? new FlowDoc();
-            Surface.Children.Clear(); views.Clear(); doc = d; sel = linkFrom = null; Side.Visibility = Visibility.Collapsed;
+            CloseAllRunners(); Surface.Children.Clear(); views.Clear(); doc = d; sel = linkFrom = null; Side.Visibility = Visibility.Collapsed;
             nextId = d.Nodes.Count == 0 ? 1 : d.Nodes.Max(n => n.Id) + 1;
             foreach (var n in d.Nodes) BuildView(n);
             DrawEdges();

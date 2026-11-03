@@ -1,0 +1,4 @@
+Cust Id,FullName,Email,OrderDate,Amount,Currency
+1001,Alice Tan,alice@example.com,2026-10-01,120.50,USD
+1002,Bob Lee,bob@example.com,2026-10-02,75.00,USD
+1003,Carol Wong,carol@example.com,2026-10-03,99.99,USD

@@ -5,8 +5,8 @@ Requirements: Windows, .NET 8 SDK (or Visual Studio 2022 17.8+).
     dotnet run
 
 ## Windows
-- **Test Runner** (main window): Import Excel, Run All / Run Selected / Stop, status counts, detail panel, Export Report (CSV), Template (blank Excel with sample rows), Open Flow.
-- **Flow canvas**: add nodes from the palette, drag, connect (right dot -> left dot). Click a node to open Properties / Advanced settings. Advanced has retry count, delay, timeout, run condition, on-failure and Import Excel.
+- **Test cases** (sub window of the Flow window, open it with the "Test cases" button): Import Excel, Run All / Run Selected / Stop, status counts, detail panel, Export Report (CSV), Template (blank Excel with sample rows).
+- **Flow canvas** (main window, opens first): add nodes from the palette, drag, connect (right dot -> left dot). Click a node to open Properties / Advanced settings. Advanced has retry count, delay, timeout, run condition, on-failure and Import Excel.
   The "Run imported test cases" node runs every imported scenario inside the flow.
 
 ## Excel columns (each node has its own imported file)
@@ -36,7 +36,7 @@ Fixed-width: put numeric Start (1-based) and Length columns in the spec Mapping 
 Limit: a quoted value cannot span several lines.
 
 ### CSV files: generate the test cases from a CSV
-Button **CSV -> Test Cases** (Test Runner toolbar). Pick a known-good CSV (or any delimited text file); the app reads it with the same reader as `ExcelVerify` (`CsvTestGenerator.cs`) and writes two workbooks:
+Button **CSV -> Test Cases** (Test cases window toolbar). Pick a known-good CSV (or any delimited text file); the app reads it with the same reader as `ExcelVerify` (`CsvTestGenerator.cs`) and writes two workbooks:
 - `<name>_Spec.xlsx`: sheet `Mapping`, one row per column. `DataType` (bool / int / decimal / date / text), `Required` (Yes when no value is empty), `Pattern` (email shape when every value looks like an email) and `ExpectedValue` (when every row has the same value) are learned from the data.
 - `<name>.xlsx`: sheet `TestCases` with `ExcelVerify` cases: the exact file, the newest `*.csv` in the folder (chain it after a Run EXE node), and the file read as comma separated.
 Import the test case file with Import Excel and run it. Review the spec first: rules are guesses, so errors in the sample become rules.
