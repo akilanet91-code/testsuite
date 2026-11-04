@@ -20,6 +20,7 @@ public static class RunContext
     static readonly HashSet<string> NoResolve = new(StringComparer.OrdinalIgnoreCase) { "Name", "Description", "Type", "Status", "Message", "SaveAs" };
     static readonly HashSet<string> SqlFields = new(StringComparer.OrdinalIgnoreCase) { "DbQuery", "DbCheckQuery" };
 
+    public static void Set(string name, string value) { lock (Gate) Vars[name] = value; }
     public static void Clear() { lock (Gate) Vars.Clear(); }
     public static IReadOnlyDictionary<string, string> Snapshot() { lock (Gate) return new Dictionary<string, string>(Vars); }
 

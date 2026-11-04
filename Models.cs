@@ -187,6 +187,8 @@ public class FlowNode
     // Each node keeps its OWN Excel test cases
     public string ExcelFile { get; set; } = "";
     public ObservableCollection<TestCase> Cases { get; set; } = new();
+    // Stub service: when enabled, running this node writes a file instead of running its real action
+    public StubConfig Stub { get; set; } = new();
 }
 public class FlowEdge { public int From { get; set; } public int To { get; set; } }
 public class FlowDoc { public List<FlowNode> Nodes { get; set; } = new(); public List<FlowEdge> Edges { get; set; } = new(); }

@@ -6,8 +6,18 @@ Requirements: Windows, .NET 8 SDK (or Visual Studio 2022 17.8+).
 
 ## Windows
 - **Test cases** (sub window of the Flow window, open it with the "Test cases" button): Import Excel, Run All / Run Selected / Stop, status counts, detail panel, Export Report (CSV), Template (blank Excel with sample rows).
-- **Flow canvas** (main window, opens first): add nodes from the palette, drag, connect (right dot -> left dot). Click a node to open Properties / Advanced settings. Advanced has retry count, delay, timeout, run condition, on-failure and Import Excel.
+- **Flow canvas** (main window, opens first): add nodes from the palette, drag, connect (right dot -> left dot). Click a node to open Properties / Advanced settings. **Double-click a node** (or right-click > "Open test cases", or the "Test cases" button with a node selected) to open that node's own test case window; each node has its own window, and opening it again brings it to the front. Advanced has retry count, delay, timeout, run condition, on-failure and Import Excel.
   The "Run imported test cases" node runs every imported scenario inside the flow.
+
+## Stub service (generate a file from a node)
+Node > **Advanced** tab > **STUB SERVICE**. Tick "Enable stub service" and running that node writes a file instead of running its real action (use it to fake a job/app that has not been built yet, then chain file-check / CSV-vs-DB nodes after it).
+- Output folder (relative = exe folder), File name (`{yyyyMMdd_HHmmss}` = date/time, `{var:x}` = saved value), Format: CSV / Delimited (any delimiter) / FixedWidth / Excel, header on/off, number of rows, simulated delay, seed (same data each run).
+- Columns, one per line: `NAME=generator` (fixed width: `NAME=generator@length`). Generators: `seq:1`, `int:1-100`, `decimal:0-500:2`, `date:2024-01-01..2024-12-31:yyyy-MM-dd`, `choice:A|B|C`, `const:X`, `text:8`, `name`, `email`, `bool`, `guid`.
+- **AS400 (spec + DB)** format: fixed-length records driven by a spec workbook (sheet `Mapping`, the same spec ExcelVerify uses: `TargetColumn, SourceColumn, DataType, Start, Length` + optional `Decimals, Storage, Align, Pad, Format, Default, Generator`). Sample: `Samples\StubSpec_AS400.xlsx`.
+  - **DB data:** give a `SELECT` and each spec field is filled from the result column named in `SourceColumn` (blank = same as `TargetColumn`); one record per row (`Max DB rows`, 0 = all). A mapped column the SELECT does not return is an error that lists the returned columns. Fields without a DB value use `Default`, then `Generator`, then a value made from `DataType`. Without a SELECT every record is generated. The DB is the one in `appsettings.json` (SQL Server); `{var:x}` works inside the SELECT.
+  - **AS400 details:** Encoding ASCII / UTF-8 / EBCDIC-037 / 500 / 1140; record end CRLF, LF or none (pure fixed records); `Storage` Display, Zoned (implied decimal point, sign overpunch) or Packed (COMP-3); zero or space padding; date formats such as `yyyyMMdd`.
+  - **Header / trailer record:** templates such as `HDR{date:yyyyMMdd}` and `TRL{count:6}{sum:BALANCE:12}` (`{pad:5}` = spaces), padded to the record length, matching HeaderTrailerVerify.
+- The created path is saved as `{var:stubFile}` (name configurable) for later nodes. The settings are saved in the flow JSON.
 
 ## Excel columns (each node has its own imported file)
 Id, Name, Description, Type (CtrlMJob | ExeRunner | ExeWithFileCheck | ApiCall | FileCheck), CtrlMJobName, CtrlMArguments,

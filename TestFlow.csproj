@@ -21,4 +21,13 @@
     <None Update="Samples\**" CopyToOutputDirectory="PreserveNewest" />
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- Ignore nested copies of the project (e.g. a zip unzipped inside this folder) and stray generated files.
+       A second App.xaml compiled into the project causes CS0102 "App already contains a definition for ContentLoaded". -->
+  <ItemGroup>
+    <Compile Remove="**\TestFlowApp\**;**\*.g.cs;**\*.g.i.cs" />
+    <Page Remove="**\TestFlowApp\**" />
+    <ApplicationDefinition Remove="**\TestFlowApp\**" />
+    <EmbeddedResource Remove="**\TestFlowApp\**" />
+    <None Remove="**\TestFlowApp\**" />
+  </ItemGroup>
 </Project>

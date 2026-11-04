@@ -173,7 +173,8 @@ public partial class FlowWindow : Window
         var v = views[n.Id]; var k = Kinds.All[n.Kind];
         v.Icon.Text = k.Icon; v.Name.Text = n.Name; v.Title.Text = k.Title.ToUpperInvariant();
         v.Desc.Text = string.IsNullOrWhiteSpace(n.Description) ? Kinds.DefaultDesc(n.Kind) : n.Description;
-        v.Sum.Text = n.Cases.Count > 0 ? $"📊 {(n.ExcelFile.Length > 0 ? n.ExcelFile : "cases")} · {n.Cases.Count} rows"
+        v.Sum.Text = n.Stub.Enabled ? $"🧪 STUB → {n.Stub.Format}"
+            : n.Cases.Count > 0 ? $"📊 {(n.ExcelFile.Length > 0 ? n.ExcelFile : "cases")} · {n.Cases.Count} rows"
             : n.Props.Values.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? "—";
         v.Check.Text = n.Status switch { "passed" => "✅", "failed" => "❌", "running" => "⏳", _ => "" };
         v.Box.BorderBrush = n.Status switch
@@ -263,13 +264,41 @@ public partial class FlowWindow : Window
     void TabP_Click(object s, RoutedEventArgs e) { PropsPanel.Visibility = Visibility.Visible; AdvPanel.Visibility = Visibility.Collapsed; }
     void TabA_Click(object s, RoutedEventArgs e) { PropsPanel.Visibility = Visibility.Collapsed; AdvPanel.Visibility = Visibility.Visible; }
 
-    void AddField(Panel p, string label, string val, Action<string> set, bool multi = false)
+    void AddField(Panel p, string label, string val, Action<string> set, bool multi = false, double minHeight = 64)
     {
         p.Children.Add(new TextBlock { Text = label, Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
         var tb = new TextBox { Text = val };
-        if (multi) { tb.AcceptsReturn = true; tb.TextWrapping = TextWrapping.Wrap; tb.MinHeight = 64; tb.VerticalScrollBarVisibility = ScrollBarVisibility.Auto; }
+        if (multi) { tb.AcceptsReturn = true; tb.TextWrapping = TextWrapping.Wrap; tb.MinHeight = minHeight; tb.VerticalScrollBarVisibility = ScrollBarVisibility.Auto; }
         tb.TextChanged += (_, _) => set(tb.Text);
         p.Children.Add(tb);
+    }
+
+    /// <summary>Text box with a Browse button: a folder (folder = true) or an Excel file.</summary>
+    void AddPathField(Panel p, string label, string val, Action<string> set, bool folder)
+    {
+        p.Children.Add(new TextBlock { Text = label, Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
+        var tb = new TextBox { Text = val };
+        tb.TextChanged += (_, _) => set(tb.Text);
+        var btn = new Button { Content = "Browse…", Margin = new Thickness(6, 0, 0, 0) };
+        btn.Click += (_, _) =>
+        {
+            string start = tb.Text.Trim();
+            if (start.Length > 0 && !System.IO.Path.IsPathRooted(start)) start = System.IO.Path.Combine(AppContext.BaseDirectory, start);
+            if (folder)
+            {
+                var d = new OpenFolderDialog { Title = "Choose the output folder" };
+                if (Directory.Exists(start)) d.InitialDirectory = start;
+                if (d.ShowDialog(this) == true) tb.Text = d.FolderName;
+            }
+            else
+            {
+                var d = new OpenFileDialog { Filter = "Excel workbook (*.xlsx;*.xls)|*.xlsx;*.xls|All files|*.*", Title = "Choose the spec file" };
+                if (d.ShowDialog(this) == true) tb.Text = d.FileName;
+            }
+        };
+        var row = new DockPanel();
+        DockPanel.SetDock(btn, Dock.Right); row.Children.Add(btn); row.Children.Add(tb);
+        p.Children.Add(row);
     }
 
     void Section(Panel p, string title) =>
@@ -310,6 +339,54 @@ public partial class FlowWindow : Window
         var cb = new ComboBox { ItemsSource = new[] { "Stop flow", "Continue" }, SelectedItem = n.OnFailure, Margin = new Thickness(0, 4, 0, 0) };
         cb.SelectionChanged += (_, _) => { if (cb.SelectedItem is string s2) n.OnFailure = s2; };
         AdvPanel.Children.Add(cb);
+        // stub service
+        Section(AdvPanel, "STUB SERVICE (generate a file instead of running this node)");
+        var st = n.Stub;
+        var en = new CheckBox { Content = "Enable stub service for this node", IsChecked = st.Enabled, Foreground = Res("Tx"), Margin = new Thickness(0, 6, 0, 0) };
+        en.Checked += (_, _) => { st.Enabled = true; Refresh(n); }; en.Unchecked += (_, _) => { st.Enabled = false; Refresh(n); };
+        AdvPanel.Children.Add(en);
+        AddPathField(AdvPanel, "Output folder: where the file is saved (e.g. D:\\TestOutput; relative = exe folder; created if missing)", st.Folder, t => st.Folder = t, folder: true);
+        AddField(AdvPanel, "File name  ({yyyyMMdd_HHmmss} = date/time, {var:x} = saved value)", st.FileName, t => st.FileName = t);
+        AdvPanel.Children.Add(new TextBlock { Text = "File format", Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
+        var fmt = new ComboBox { ItemsSource = StubFileService.Formats, SelectedItem = st.Format };
+        fmt.SelectionChanged += (_, _) => { if (fmt.SelectedItem is string f) st.Format = f; };
+        AdvPanel.Children.Add(fmt);
+        var simple = new StackPanel(); var spec = new StackPanel();
+        AdvPanel.Children.Add(simple); AdvPanel.Children.Add(spec);
+        void ShowFormat() { bool a4 = st.Format.StartsWith("AS400"); spec.Visibility = a4 ? Visibility.Visible : Visibility.Collapsed; simple.Visibility = a4 ? Visibility.Collapsed : Visibility.Visible; }
+        fmt.SelectionChanged += (_, _) => ShowFormat();
+
+        AddField(simple, "Delimiter (Delimited only: comma / pipe / tab / semicolon / tilde / any text)", st.Delimiter, t => st.Delimiter = t);
+        var hh = new CheckBox { Content = "First line is a header", IsChecked = st.HasHeader, Foreground = Res("Tx"), Margin = new Thickness(0, 10, 0, 0) };
+        hh.Checked += (_, _) => st.HasHeader = true; hh.Unchecked += (_, _) => st.HasHeader = false;
+        simple.Children.Add(hh);
+        AddField(simple, "Number of rows", st.Rows.ToString(), t => { if (int.TryParse(t, out var v)) st.Rows = v; });
+        AddField(simple, "Columns: NAME=generator, one per line (fixed width: NAME=generator@length)", st.Columns, t => st.Columns = t, multi: true);
+        simple.Children.Add(new TextBlock { Foreground = Res("Mu"), FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0),
+            Text = "Generators: seq:1 · int:1-100 · decimal:0-500:2 · date:2024-01-01..2024-12-31:yyyy-MM-dd · choice:A|B|C · const:X · text:8 · name · email · bool · guid" });
+
+        // AS400: fixed records from a spec workbook, data from a DB SELECT
+        AddPathField(spec, "Spec file (.xlsx, sheet Mapping: TargetColumn, SourceColumn, DataType, Start, Length ...)", st.SpecFile, t => st.SpecFile = t, folder: false);
+        AddField(spec, "Spec sheet name", st.SpecSheet, t => st.SpecSheet = t);
+        AddField(spec, "SQL SELECT (SQL Server, optional): write it here. Spec SourceColumn = column of this result. Blank = generated values", st.DbQuery, t => st.DbQuery = t, multi: true, minHeight: 160);
+        AddField(spec, "Max DB rows (0 = all)   ·   rows to generate when there is no SELECT:", st.MaxRows.ToString(), t => { if (int.TryParse(t, out var v)) st.MaxRows = v; });
+        AddField(spec, "Rows to generate (no SELECT)", st.Rows.ToString(), t => { if (int.TryParse(t, out var v)) st.Rows = v; });
+        spec.Children.Add(new TextBlock { Text = "Encoding", Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
+        var enc = new ComboBox { ItemsSource = As400StubWriter.Encodings, SelectedItem = st.Encoding };
+        enc.SelectionChanged += (_, _) => { if (enc.SelectedItem is string x) st.Encoding = x; };
+        spec.Children.Add(enc);
+        spec.Children.Add(new TextBlock { Text = "Record end", Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
+        var term = new ComboBox { ItemsSource = As400StubWriter.Terminators, SelectedItem = st.RecordTerminator };
+        term.SelectionChanged += (_, _) => { if (term.SelectedItem is string x) st.RecordTerminator = x; };
+        spec.Children.Add(term);
+        AddField(spec, "Record length (0 = end of the last spec column)", st.RecordLength.ToString(), t => { if (int.TryParse(t, out var v)) st.RecordLength = v; });
+        AddField(spec, "Header record (optional), e.g. HDR{date:yyyyMMdd}", st.HeaderRecord, t => st.HeaderRecord = t);
+        AddField(spec, "Trailer record (optional), e.g. TRL{count:6}  ({sum:Amount:12}, {pad:5})", st.TrailerRecord, t => st.TrailerRecord = t);
+        ShowFormat();
+        AddField(AdvPanel, "Seed (blank = different data each run; a number = same data each run)", st.Seed, t => st.Seed = t);
+        AddField(AdvPanel, "Simulated delay (seconds)", st.DelaySeconds.ToString(), t => { if (int.TryParse(t, out var v)) st.DelaySeconds = v; });
+        AddField(AdvPanel, "Save created file path as variable (use {var:name} in later nodes)", st.SaveAs, t => st.SaveAs = t);
+
         Section(AdvPanel, "TEST CASES (this node only)");
         var info = new TextBlock { Foreground = Res("Mu"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 6),
             Text = n.Cases.Count > 0 ? $"{n.ExcelFile} – {n.Cases.Count} rows" : "No Excel imported yet" };
@@ -377,7 +454,18 @@ public partial class FlowWindow : Window
     {
         n.Status = "running"; Refresh(n); Log("INFO", $"Running “{n.Name}”");
         bool ok = false;
-        if (n.Cases.Count > 0)
+        if (n.Stub.Enabled)
+        {
+            try
+            {
+                var file = await StubFileService.RunAsync(n.Stub, ct);
+                if (!string.IsNullOrWhiteSpace(n.Stub.SaveAs)) RunContext.Set(n.Stub.SaveAs.Trim(), file);
+                ok = true; Log("INFO", $"Stub service created {file}" + (string.IsNullOrWhiteSpace(n.Stub.SaveAs) ? "" : $"  (saved as {{var:{n.Stub.SaveAs.Trim()}}})"));
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { Log("FAIL", "Stub service failed: " + ex.Message); }
+        }
+        else if (n.Cases.Count > 0)
         {
             foreach (var c in n.Cases.ToList())
             {
