@@ -31,6 +31,8 @@ public class StubConfig
     public int RecordLength { get; set; } = 0;            // 0 = end of the last spec column
     public string HeaderRecord { get; set; } = "";        // e.g. HDR{date:yyyyMMdd}
     public string TrailerRecord { get; set; } = "";       // e.g. TRL{count:6}
+    public string ColumnMap { get; set; } = "";           // FIELD=DB_COLUMN, one per line: which SELECT column fills which spec field (overrides the spec's "DB Column" column)
+    public bool ExplicitDecimalPoint { get; set; }        // false = implied decimal point: 9(18,3) is 18 digits with no '.' (AS400 style)
     public string SaveAs { get; set; } = "stubFile";      // saves the full path as {var:stubFile} for later nodes
 }
 

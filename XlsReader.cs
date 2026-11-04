@@ -43,6 +43,25 @@ public static class XlsReader
         return SheetGrid.ToRows(Grid(reader), headerRow);
     }
 
+    /// <summary>The whole sheet as rows of cell text (no header detection). A blank name or "Mapping" that does not exist = first sheet.</summary>
+    public static (List<string[]> grid, string sheet) ReadGrid(string path, string? sheet)
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var names = new List<string>();
+        using (var fs0 = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        using (var r0 = ExcelReaderFactory.CreateBinaryReader(fs0)) { do names.Add(r0.Name); while (r0.NextResult()); }
+        int idx = string.IsNullOrWhiteSpace(sheet) ? 0 : names.FindIndex(n => n.Equals(sheet.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (idx < 0)
+        {
+            if (sheet!.Trim().Equals("Mapping", StringComparison.OrdinalIgnoreCase)) idx = 0;
+            else throw new InvalidDataException($"Sheet “{sheet}” not found. Sheets: {string.Join(", ", names)}");
+        }
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = ExcelReaderFactory.CreateBinaryReader(fs);
+        for (int i = 0; i < idx; i++) reader.NextResult();
+        return (Grid(reader), names[idx]);
+    }
+
     static List<string[]> Grid(IExcelDataReader reader)
     {
         var grid = new List<string[]>();

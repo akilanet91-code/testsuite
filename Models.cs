@@ -200,6 +200,7 @@ public static class Kinds
         ["CtrlMJob"]  = ("Control-M job", "⚙", new[] { "CtrlMJobName", "CtrlMArguments", "ExpectedExitCode" }),
         ["ExeRunner"] = ("Run EXE", "▶", new[] { "ExePath", "ExeArguments", "ExpectedExitCode", "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
         ["ApiCall"]   = ("REST request", "🌐", new[] { "ApiUrl", "HttpMethod", "RequestBody", "RequestHeaders", "ExpectedStatusCode", "ExpectedResponseContains", "ResponseCodePath", "ExpectedResponseCode", "ResponseMessagePath", "ExpectedResponseMessage", "MessageMatch", "ResponseCatalog", "SaveAs" }),
+        ["StubService"] = ("Stub service (generate file)", "🧪", Array.Empty<string>()),
         ["FileCheck"] = ("Check file", "📄", new[] { "FileCheckFolder", "FileNamePattern", "FileWaitSeconds" }),
         ["ExcelVerify"] = ("Verify file vs spec (xlsx/csv/txt/pdf)", "✔", new[] { "FileCheckFolder", "FileNamePattern", "SpecFile", "Delimiter", "HasHeader", "HeaderRow" }),
         ["HeaderTrailerVerify"] = ("Verify header date + trailer count", "🗂", new[]
@@ -247,6 +248,7 @@ public static class Kinds
         "CtrlMJob" => "Run a Control-M job and check its exit code",
         "ExeRunner" => "Launch an executable and check the result",
         "ApiCall" => "Send request and validate response",
+        "StubService" => "Stands in for a job or app: writes a file (from a spec and/or DB data) for the next nodes to check",
         "FileCheck" => "Wait for a file to appear in a folder",
         "ExcelVerify" => "Validate a generated file against the spec",
         "HeaderTrailerVerify" => "Check header date and trailer record count",

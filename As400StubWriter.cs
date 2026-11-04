@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace TestFlow;
 
@@ -20,10 +21,18 @@ public static class As400StubWriter
     static string Abs(string p) => string.IsNullOrWhiteSpace(p) || Path.IsPathRooted(p) ? p : Path.Combine(AppContext.BaseDirectory, p);
     static string G(Dictionary<string, string> d, string k) => d.TryGetValue(k, out var v) ? v.Trim() : "";
 
-    sealed class Field
+    internal sealed class Field
     {
-        public string Target = "", Source = "", Type = "text", Format = "", Align = "", Pad = "", Storage = "", Default = "", Generator = "";
-        public int Start, Length, Decimals = -1; public bool Required;
+        public string Target = "", Desc = "", Source = "", Type = "text", Format = "", Align = "", Pad = "", Storage = "", Default = "", Generator = "", Expr = "";
+        public int Start, Length, Decimals = -1; public bool Required, HasDefault;
+    }
+
+    /// <summary>Header / Detail / Trailer fields. Fsd = read from an FSD-style sheet (3 tables); otherwise one "Mapping" table = Detail.</summary>
+    internal sealed class Layout
+    {
+        public List<Field> Header = new(), Detail = new(), Trailer = new();
+        public bool Fsd; public string Sheet = "";
+        public IEnumerable<Field> All => Header.Concat(Detail).Concat(Trailer);
     }
 
     public static Encoding GetEncoding(string name)
@@ -46,12 +55,16 @@ public static class As400StubWriter
         string specPath = Abs(RunContext.Resolve(c.SpecFile));
         if (!File.Exists(specPath)) throw new InvalidOperationException($"Stub (AS400): spec file not found: {specPath}");
 
-        var fields = LoadSpec(specPath, string.IsNullOrWhiteSpace(c.SpecSheet) ? "Mapping" : c.SpecSheet.Trim());
-        int recLen = Math.Max(c.RecordLength, fields.Max(f => f.Start + f.Length - 1));
+        var layout = LoadLayout(specPath, c);
+        if (layout.Detail.Count == 0) throw new InvalidOperationException("Stub (AS400): the spec has no Detail fields (the table without a Header / Trailer label above it)");
+        ApplyColumnMap(layout.Detail, c.ColumnMap);
+        int recLen = Math.Max(c.RecordLength, layout.All.Max(f => f.Start + f.Length - 1));
         var enc = GetEncoding(c.Encoding);
         var rnd = int.TryParse(c.Seed, out var seed) ? new Random(seed) : new Random();
+        Runner.LogSink?.Invoke("INFO", $"Stub (AS400): spec sheet “{layout.Sheet}” - {(layout.Fsd ? $"header {layout.Header.Count}, detail {layout.Detail.Count}, trailer {layout.Trailer.Count} fields" : $"{layout.Detail.Count} fields")}, record length {recLen}");
 
-        // ----- data rows: DB select (mapped by SourceColumn) or generated -----
+        // ----- detail rows: DB select (mapped by the spec's DB Column) or generated -----
+        var fields = layout.Detail;
         List<Dictionary<string, object?>>? dbRows = null;
         if (!string.IsNullOrWhiteSpace(c.DbQuery)) dbRows = await ReadDb(RunContext.Resolve(c.DbQuery, sql: true), c.MaxRows, fields, ct);
         int count = dbRows?.Count ?? Math.Max(0, c.Rows);
@@ -67,18 +80,20 @@ public static class As400StubWriter
             {
                 object? v = Value(f, dbRows?[r - 1], r, rnd);
                 try { Put(rec, f, v, enc); }
-                catch (InvalidOperationException ex) { throw new InvalidOperationException($"Stub (AS400): row {r}, column “{f.Target}”: {ex.Message}"); }
+                catch (InvalidOperationException ex) { throw new InvalidOperationException($"Stub (AS400): detail row {r}, field “{f.Target}”: {ex.Message}"); }
                 if (f.Type is "int" or "decimal" && TryDecimal(v, out var d)) sums[f.Target] = sums.GetValueOrDefault(f.Target) + d;
             }
             records.Add(rec);
         }
 
-        // ----- file = [header] + records + [trailer] -----
+        // ----- file = header + detail records + trailer (from the spec's tables, or from the templates when those are filled in) -----
         var now = DateTime.Now;
         var all = new List<byte[]>();
         if (!string.IsNullOrWhiteSpace(c.HeaderRecord)) all.Add(Special(c.HeaderRecord, recLen, now, count, sums, enc));
+        else if (layout.Header.Count > 0) all.Add(FromSpec("header", layout.Header, layout, recLen, enc, now, count, sums));
         all.AddRange(records);
         if (!string.IsNullOrWhiteSpace(c.TrailerRecord)) all.Add(Special(c.TrailerRecord, recLen, now, count, sums, enc));
+        else if (layout.Trailer.Count > 0) all.Add(FromSpec("trailer", layout.Trailer, layout, recLen, enc, now, count, sums));
 
         string dir = Abs(RunContext.Resolve(c.Folder)); Directory.CreateDirectory(dir);
         string path = Path.Combine(dir, StubFileService.ExpandName(RunContext.Resolve(c.FileName)));
@@ -93,8 +108,72 @@ public static class As400StubWriter
         return path;
     }
 
+    /// <summary>One header or trailer record from its spec table: Default value, else date = now, else COUNT / SUM(field) (typed in the DB Column cell, or recognised from the name).</summary>
+    static byte[] FromSpec(string what, List<Field> fields, Layout lay, int recLen, Encoding enc, DateTime now, int count, Dictionary<string, decimal> sums)
+    {
+        var rec = Blank(recLen, enc);
+        foreach (var f in fields)
+        {
+            object? v = SpecialValue(f, lay, now, count, sums);
+            try { Put(rec, f, v, enc); }
+            catch (InvalidOperationException ex) { throw new InvalidOperationException($"Stub (AS400): {what} field “{f.Target}”: {ex.Message}"); }
+        }
+        return rec;
+    }
+
+    static object? SpecialValue(Field f, Layout lay, DateTime now, int count, Dictionary<string, decimal> sums)
+    {
+        if (f.Expr.Length > 0)
+        {
+            if (f.Expr.Equals("COUNT", StringComparison.OrdinalIgnoreCase)) return count;
+            var m = Regex.Match(f.Expr, @"^sum\s*\(\s*(.+?)\s*\)$", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                if (!lay.Detail.Any(d => d.Target.Equals(m.Groups[1].Value, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException($"{f.Expr}: there is no Detail field named “{m.Groups[1].Value}”");
+                return sums.GetValueOrDefault(m.Groups[1].Value);
+            }
+        }
+        if (f.HasDefault) return f.Default;
+        if (f.Type == "date") return now;
+        string key = f.Target + " " + f.Desc;
+        if (Regex.IsMatch(key, @"tot\w*\s*rec|record\s*count|no\.?\s*of\s*rec", RegexOptions.IgnoreCase)) return count;   // TOTRECS / Total Records
+        if (Regex.IsMatch(key, @"tot\w*.*(amt|amount)", RegexOptions.IgnoreCase))                                       // Total Tran Amount
+        {
+            var amt = lay.Detail.FirstOrDefault(d => d.Type == "decimal" && Regex.IsMatch(d.Target + " " + d.Desc, @"(tran|trx|trans|txn).*(amt|amount)", RegexOptions.IgnoreCase));
+            if (amt != null) return sums.GetValueOrDefault(amt.Target);
+            Runner.LogSink?.Invoke("INFO", $"Stub (AS400): “{f.Target}” written as 0 - no detail amount field found. Put SUM(<detail field>) in this row's DB Column cell.");
+            return 0m;
+        }
+        return null;
+    }
+
+    static void ApplyColumnMap(List<Field> detail, string map)
+    {
+        foreach (var raw in (map ?? "").Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = raw.Trim(); if (line.Length == 0 || line.StartsWith('#')) continue;
+            int eq = line.IndexOf('=');
+            if (eq < 1) throw new InvalidOperationException($"Stub (AS400): column map line “{line}” - use FIELD=DB_COLUMN");
+            string field = line[..eq].Trim(), col = line[(eq + 1)..].Trim();
+            var hits = detail.Where(f => f.Target.Equals(field, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (hits.Count == 0) throw new InvalidOperationException($"Stub (AS400): column map: the spec has no Detail field “{field}”");
+            foreach (var h in hits) h.Source = col;
+        }
+    }
+
     // ---------- spec ----------
-    static List<Field> LoadSpec(string path, string sheet)
+    static Layout LoadLayout(string path, StubConfig c)
+    {
+        string sheet = string.IsNullOrWhiteSpace(c.SpecSheet) ? "Mapping" : c.SpecSheet.Trim();
+        var (grid, used) = ExcelIO.ReadGrid(path, sheet);
+        var fsd = FsdSpec.Parse(grid, c.ExplicitDecimalPoint);
+        if (fsd != null) { fsd.Sheet = used; return fsd; }
+        return new Layout { Detail = LoadMapping(path, used), Sheet = used };
+    }
+
+    /// <summary>The simple one-table layout: TargetColumn, SourceColumn, DataType, Start, Length (+ optional columns).</summary>
+    static List<Field> LoadMapping(string path, string sheet)
     {
         var rows = ExcelIO.ReadRows(path, sheet);
         var list = new List<Field>(); int next = 1;
@@ -104,6 +183,7 @@ public static class As400StubWriter
             if (f.Target == "") continue;
             f.Source = G(r, "SourceColumn"); f.Format = G(r, "Format"); f.Align = G(r, "Align").ToLowerInvariant();
             f.Pad = G(r, "Pad"); f.Storage = G(r, "Storage").ToLowerInvariant(); f.Default = G(r, "Default"); f.Generator = G(r, "Generator");
+            f.HasDefault = f.Default != "";
             f.Required = G(r, "Required").ToLowerInvariant() is "yes" or "y" or "true" or "1";
             f.Type = G(r, "DataType").ToLowerInvariant() switch
             {
@@ -116,7 +196,7 @@ public static class As400StubWriter
             next = f.Start + f.Length;
             list.Add(f);
         }
-        if (list.Count == 0) throw new InvalidOperationException($"Stub (AS400): sheet “{sheet}” of the spec has no TargetColumn rows");
+        if (list.Count == 0) throw new InvalidOperationException($"Stub (AS400): sheet “{sheet}” of the spec has no TargetColumn rows (or, for an FSD sheet, no table with Field Name / Length columns)");
         return list;
     }
 
@@ -133,7 +213,7 @@ public static class As400StubWriter
         var cols = Enumerable.Range(0, rd.FieldCount).Select(rd.GetName).ToList();
         // a mapped column that the SELECT does not return is a mistake worth reporting (columns without SourceColumn may come from defaults)
         var missing = fields.Where(f => f.Source != "" && !cols.Contains(f.Source, StringComparer.OrdinalIgnoreCase)).Select(f => f.Source).ToList();
-        if (missing.Count > 0) throw new InvalidOperationException($"Stub (AS400): the SELECT does not return mapped column(s) {string.Join(", ", missing)}. Returned: {string.Join(", ", cols)}");
+        if (missing.Count > 0) throw new InvalidOperationException($"Stub (AS400): the SELECT does not return the DB column(s) {string.Join(", ", missing)}. Returned: {string.Join(", ", cols)}");
         while (await rd.ReadAsync(ct))
         {
             var d = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
@@ -151,11 +231,14 @@ public static class As400StubWriter
             string key = f.Source != "" ? f.Source : f.Target;
             if (db.TryGetValue(key, out var v)) return v;   // DB NULL stays null -> written as blanks / zero
         }
-        if (f.Default != "") return f.Default;
+        if (f.HasDefault) return f.Default;
         if (f.Generator != "") return StubFileService.Generate(f.Generator, row, rnd);
+        int dec = Math.Max(0, f.Decimals < 0 ? 2 : f.Decimals);
+        long maxInt = (long)Math.Pow(10, Math.Clamp(f.Length, 1, 6)) - 1;                       // fits the field
+        long maxDec = (long)Math.Pow(10, Math.Clamp(f.Length - dec, 1, 5)) - 1;
         string kind = f.Type switch
         {
-            "int" => "int:0-9999", "decimal" => $"decimal:0-9999:{Math.Max(0, f.Decimals < 0 ? 2 : f.Decimals)}",
+            "int" => $"int:0-{maxInt}", "decimal" => $"decimal:0-{maxDec}:{dec}",
             "date" => "date:2024-01-01..2024-12-31:yyyy-MM-dd", "bool" => "bool", _ => "text:" + Math.Min(f.Length, 10)
         };
         return StubFileService.Generate(kind, row, rnd);
@@ -202,7 +285,7 @@ public static class As400StubWriter
             DateTime dt;
             if (v is DateTime d0) dt = d0;
             else if (!DateTime.TryParse(Convert.ToString(v, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, DateTimeStyles.None, out dt)
-                  && !DateTime.TryParseExact(Convert.ToString(v, CultureInfo.InvariantCulture), new[] { "yyyyMMdd", "yyMMdd", "ddMMyyyy" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out dt))
+                  && !DateTime.TryParseExact(Convert.ToString(v, CultureInfo.InvariantCulture), new[] { "yyyyMMddHHmmss", "yyyyMMddHHmm", "yyyyMMdd", "yyMMdd", "ddMMyyyy" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out dt))
                 throw new InvalidOperationException($"“{v}” is not a date");
             s = dt.ToString(fmt, CultureInfo.InvariantCulture);
         }

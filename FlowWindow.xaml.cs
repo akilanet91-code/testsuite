@@ -116,6 +116,7 @@ public partial class FlowWindow : Window
     {
         var n = new FlowNode { Id = nextId++, Kind = kind, Name = Kinds.All[kind].Title, Description = Kinds.DefaultDesc(kind), X = x, Y = y };
         foreach (var f in Kinds.All[kind].Fields) n.Props[f] = Kinds.Default(f);
+        if (kind == "StubService") { n.Stub.Enabled = true; n.Stub.Format = StubFileService.Formats[^1]; n.Stub.FileName = "stub_{yyyyMMdd_HHmmss}.txt"; }
         doc.Nodes.Add(n); BuildView(n); return n;
     }
 
@@ -173,7 +174,7 @@ public partial class FlowWindow : Window
         var v = views[n.Id]; var k = Kinds.All[n.Kind];
         v.Icon.Text = k.Icon; v.Name.Text = n.Name; v.Title.Text = k.Title.ToUpperInvariant();
         v.Desc.Text = string.IsNullOrWhiteSpace(n.Description) ? Kinds.DefaultDesc(n.Kind) : n.Description;
-        v.Sum.Text = n.Stub.Enabled ? $"🧪 STUB → {n.Stub.Format}"
+        v.Sum.Text = n.Stub.Enabled || n.Kind == "StubService" ? $"🧪 STUB → {n.Stub.Format}"
             : n.Cases.Count > 0 ? $"📊 {(n.ExcelFile.Length > 0 ? n.ExcelFile : "cases")} · {n.Cases.Count} rows"
             : n.Props.Values.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? "—";
         v.Check.Text = n.Status switch { "passed" => "✅", "failed" => "❌", "running" => "⏳", _ => "" };
@@ -320,7 +321,8 @@ public partial class FlowWindow : Window
 
         AddField(PropsPanel, "Node name", n.Name, t => { n.Name = t; SideTitle.Text = t; Refresh(n); });
         AddField(PropsPanel, "Description", n.Description, t => { n.Description = t; Refresh(n); }, multi: true);
-        foreach (var (title, fields) in Kinds.Layout(n.Kind))
+        if (n.Kind == "StubService") { n.Stub.Enabled = true; BuildStubUi(PropsPanel, n, true); }
+        else foreach (var (title, fields) in Kinds.Layout(n.Kind))
         {
             Section(PropsPanel, title);
             foreach (var f in fields)
@@ -339,53 +341,7 @@ public partial class FlowWindow : Window
         var cb = new ComboBox { ItemsSource = new[] { "Stop flow", "Continue" }, SelectedItem = n.OnFailure, Margin = new Thickness(0, 4, 0, 0) };
         cb.SelectionChanged += (_, _) => { if (cb.SelectedItem is string s2) n.OnFailure = s2; };
         AdvPanel.Children.Add(cb);
-        // stub service
-        Section(AdvPanel, "STUB SERVICE (generate a file instead of running this node)");
-        var st = n.Stub;
-        var en = new CheckBox { Content = "Enable stub service for this node", IsChecked = st.Enabled, Foreground = Res("Tx"), Margin = new Thickness(0, 6, 0, 0) };
-        en.Checked += (_, _) => { st.Enabled = true; Refresh(n); }; en.Unchecked += (_, _) => { st.Enabled = false; Refresh(n); };
-        AdvPanel.Children.Add(en);
-        AddPathField(AdvPanel, "Output folder: where the file is saved (e.g. D:\\TestOutput; relative = exe folder; created if missing)", st.Folder, t => st.Folder = t, folder: true);
-        AddField(AdvPanel, "File name  ({yyyyMMdd_HHmmss} = date/time, {var:x} = saved value)", st.FileName, t => st.FileName = t);
-        AdvPanel.Children.Add(new TextBlock { Text = "File format", Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
-        var fmt = new ComboBox { ItemsSource = StubFileService.Formats, SelectedItem = st.Format };
-        fmt.SelectionChanged += (_, _) => { if (fmt.SelectedItem is string f) st.Format = f; };
-        AdvPanel.Children.Add(fmt);
-        var simple = new StackPanel(); var spec = new StackPanel();
-        AdvPanel.Children.Add(simple); AdvPanel.Children.Add(spec);
-        void ShowFormat() { bool a4 = st.Format.StartsWith("AS400"); spec.Visibility = a4 ? Visibility.Visible : Visibility.Collapsed; simple.Visibility = a4 ? Visibility.Collapsed : Visibility.Visible; }
-        fmt.SelectionChanged += (_, _) => ShowFormat();
-
-        AddField(simple, "Delimiter (Delimited only: comma / pipe / tab / semicolon / tilde / any text)", st.Delimiter, t => st.Delimiter = t);
-        var hh = new CheckBox { Content = "First line is a header", IsChecked = st.HasHeader, Foreground = Res("Tx"), Margin = new Thickness(0, 10, 0, 0) };
-        hh.Checked += (_, _) => st.HasHeader = true; hh.Unchecked += (_, _) => st.HasHeader = false;
-        simple.Children.Add(hh);
-        AddField(simple, "Number of rows", st.Rows.ToString(), t => { if (int.TryParse(t, out var v)) st.Rows = v; });
-        AddField(simple, "Columns: NAME=generator, one per line (fixed width: NAME=generator@length)", st.Columns, t => st.Columns = t, multi: true);
-        simple.Children.Add(new TextBlock { Foreground = Res("Mu"), FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0),
-            Text = "Generators: seq:1 · int:1-100 · decimal:0-500:2 · date:2024-01-01..2024-12-31:yyyy-MM-dd · choice:A|B|C · const:X · text:8 · name · email · bool · guid" });
-
-        // AS400: fixed records from a spec workbook, data from a DB SELECT
-        AddPathField(spec, "Spec file (.xlsx, sheet Mapping: TargetColumn, SourceColumn, DataType, Start, Length ...)", st.SpecFile, t => st.SpecFile = t, folder: false);
-        AddField(spec, "Spec sheet name", st.SpecSheet, t => st.SpecSheet = t);
-        AddField(spec, "SQL SELECT (SQL Server, optional): write it here. Spec SourceColumn = column of this result. Blank = generated values", st.DbQuery, t => st.DbQuery = t, multi: true, minHeight: 160);
-        AddField(spec, "Max DB rows (0 = all)   ·   rows to generate when there is no SELECT:", st.MaxRows.ToString(), t => { if (int.TryParse(t, out var v)) st.MaxRows = v; });
-        AddField(spec, "Rows to generate (no SELECT)", st.Rows.ToString(), t => { if (int.TryParse(t, out var v)) st.Rows = v; });
-        spec.Children.Add(new TextBlock { Text = "Encoding", Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
-        var enc = new ComboBox { ItemsSource = As400StubWriter.Encodings, SelectedItem = st.Encoding };
-        enc.SelectionChanged += (_, _) => { if (enc.SelectedItem is string x) st.Encoding = x; };
-        spec.Children.Add(enc);
-        spec.Children.Add(new TextBlock { Text = "Record end", Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
-        var term = new ComboBox { ItemsSource = As400StubWriter.Terminators, SelectedItem = st.RecordTerminator };
-        term.SelectionChanged += (_, _) => { if (term.SelectedItem is string x) st.RecordTerminator = x; };
-        spec.Children.Add(term);
-        AddField(spec, "Record length (0 = end of the last spec column)", st.RecordLength.ToString(), t => { if (int.TryParse(t, out var v)) st.RecordLength = v; });
-        AddField(spec, "Header record (optional), e.g. HDR{date:yyyyMMdd}", st.HeaderRecord, t => st.HeaderRecord = t);
-        AddField(spec, "Trailer record (optional), e.g. TRL{count:6}  ({sum:Amount:12}, {pad:5})", st.TrailerRecord, t => st.TrailerRecord = t);
-        ShowFormat();
-        AddField(AdvPanel, "Seed (blank = different data each run; a number = same data each run)", st.Seed, t => st.Seed = t);
-        AddField(AdvPanel, "Simulated delay (seconds)", st.DelaySeconds.ToString(), t => { if (int.TryParse(t, out var v)) st.DelaySeconds = v; });
-        AddField(AdvPanel, "Save created file path as variable (use {var:name} in later nodes)", st.SaveAs, t => st.SaveAs = t);
+        if (n.Kind != "StubService") BuildStubUi(AdvPanel, n, false);   // other nodes: optional stub in Advanced
 
         Section(AdvPanel, "TEST CASES (this node only)");
         var info = new TextBlock { Foreground = Res("Mu"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 6),
@@ -397,6 +353,64 @@ public partial class FlowWindow : Window
         var show = new Button { Content = "📊 Open test cases window", Margin = new Thickness(0, 8, 0, 0) };
         show.Click += (_, _) => OpenRunner(n);
         AdvPanel.Children.Add(show);
+    }
+
+    /// <summary>Stub service settings. dedicated = the node is a "Stub service" node (always on, shown in Properties); otherwise an optional section of the Advanced tab.</summary>
+    void BuildStubUi(Panel P, FlowNode n, bool dedicated)
+    {
+        Section(P, dedicated ? "FILE TO GENERATE" : "STUB SERVICE (generate a file instead of running this node)");
+        var st = n.Stub;
+        if (!dedicated)
+        {
+            var en = new CheckBox { Content = "Enable stub service for this node", IsChecked = st.Enabled, Foreground = Res("Tx"), Margin = new Thickness(0, 6, 0, 0) };
+            en.Checked += (_, _) => { st.Enabled = true; Refresh(n); }; en.Unchecked += (_, _) => { st.Enabled = false; Refresh(n); };
+            P.Children.Add(en);
+        }
+        AddPathField(P, "Output folder: where the file is saved (e.g. D:\\TestOutput; relative = exe folder; created if missing)", st.Folder, t => st.Folder = t, folder: true);
+        AddField(P, "File name  ({yyyyMMdd_HHmmss} = date/time, {var:x} = saved value)", st.FileName, t => st.FileName = t);
+        P.Children.Add(new TextBlock { Text = "File format", Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
+        var fmt = new ComboBox { ItemsSource = StubFileService.Formats, SelectedItem = st.Format };
+        fmt.SelectionChanged += (_, _) => { if (fmt.SelectedItem is string f) st.Format = f; };
+        P.Children.Add(fmt);
+        var simple = new StackPanel(); var spec = new StackPanel();
+        P.Children.Add(simple); P.Children.Add(spec);
+        void ShowFormat() { bool a4 = st.Format.StartsWith("AS400"); spec.Visibility = a4 ? Visibility.Visible : Visibility.Collapsed; simple.Visibility = a4 ? Visibility.Collapsed : Visibility.Visible; }
+        fmt.SelectionChanged += (_, _) => { ShowFormat(); Refresh(n); };
+
+        AddField(simple, "Delimiter (Delimited only: comma / pipe / tab / semicolon / tilde / any text)", st.Delimiter, t => st.Delimiter = t);
+        var hh = new CheckBox { Content = "First line is a header", IsChecked = st.HasHeader, Foreground = Res("Tx"), Margin = new Thickness(0, 10, 0, 0) };
+        hh.Checked += (_, _) => st.HasHeader = true; hh.Unchecked += (_, _) => st.HasHeader = false;
+        simple.Children.Add(hh);
+        AddField(simple, "Number of rows", st.Rows.ToString(), t => { if (int.TryParse(t, out var v)) st.Rows = v; });
+        AddField(simple, "Columns: NAME=generator, one per line (fixed width: NAME=generator@length)", st.Columns, t => st.Columns = t, multi: true);
+        simple.Children.Add(new TextBlock { Foreground = Res("Mu"), FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0),
+            Text = "Generators: seq:1 · int:1-100 · decimal:0-500:2 · date:2024-01-01..2024-12-31:yyyy-MM-dd · choice:A|B|C · const:X · text:8 · name · email · bool · guid" });
+
+        // AS400: fixed records from a spec workbook, data from a DB SELECT
+        AddPathField(spec, "Spec file (.xlsx): your FSD sheet (Header / Detail / Trailer tables) or a Mapping sheet", st.SpecFile, t => st.SpecFile = t, folder: false);
+        AddField(spec, "Spec sheet name (e.g. UT_RIM_APPL; blank / Mapping = first sheet)", st.SpecSheet, t => st.SpecSheet = t);
+        AddField(spec, "SQL SELECT (SQL Server, optional): write it here. Each Detail field is filled from the result column named in the spec's “DB Column”. Blank = generated values", st.DbQuery, t => st.DbQuery = t, multi: true, minHeight: 160);
+        AddField(spec, "Column map (optional): FIELD=DB_COLUMN, one per line. Maps a spec field to a SELECT column; overrides the spec's “DB Column”", st.ColumnMap, t => st.ColumnMap = t, multi: true, minHeight: 90);
+        var dp = new CheckBox { Content = "Write a decimal point in 9(n,m) fields (default: implied, digits only)", IsChecked = st.ExplicitDecimalPoint, Foreground = Res("Tx"), Margin = new Thickness(0, 10, 0, 0) };
+        dp.Checked += (_, _) => st.ExplicitDecimalPoint = true; dp.Unchecked += (_, _) => st.ExplicitDecimalPoint = false;
+        spec.Children.Add(dp);
+        AddField(spec, "Max DB rows (0 = all)   ·   rows to generate when there is no SELECT:", st.MaxRows.ToString(), t => { if (int.TryParse(t, out var v)) st.MaxRows = v; });
+        AddField(spec, "Rows to generate (no SELECT)", st.Rows.ToString(), t => { if (int.TryParse(t, out var v)) st.Rows = v; });
+        spec.Children.Add(new TextBlock { Text = "Encoding", Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
+        var enc = new ComboBox { ItemsSource = As400StubWriter.Encodings, SelectedItem = st.Encoding };
+        enc.SelectionChanged += (_, _) => { if (enc.SelectedItem is string x) st.Encoding = x; };
+        spec.Children.Add(enc);
+        spec.Children.Add(new TextBlock { Text = "Record end", Foreground = Res("Mu"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) });
+        var term = new ComboBox { ItemsSource = As400StubWriter.Terminators, SelectedItem = st.RecordTerminator };
+        term.SelectionChanged += (_, _) => { if (term.SelectedItem is string x) st.RecordTerminator = x; };
+        spec.Children.Add(term);
+        AddField(spec, "Record length (0 = end of the last spec column)", st.RecordLength.ToString(), t => { if (int.TryParse(t, out var v)) st.RecordLength = v; });
+        AddField(spec, "Header record (blank = from the spec's Header table), e.g. HDR{date:yyyyMMdd}", st.HeaderRecord, t => st.HeaderRecord = t);
+        AddField(spec, "Trailer record (blank = from the spec's Trailer table), e.g. TRL{count:6}", st.TrailerRecord, t => st.TrailerRecord = t);
+        ShowFormat();
+        AddField(P, "Seed (blank = different data each run; a number = same data each run)", st.Seed, t => st.Seed = t);
+        AddField(P, "Simulated delay (seconds)", st.DelaySeconds.ToString(), t => { if (int.TryParse(t, out var v)) st.DelaySeconds = v; });
+        AddField(P, "Save created file path as variable (use {var:name} in later nodes)", st.SaveAs, t => st.SaveAs = t);
     }
 
     // ---------- Excel / save / load ----------
@@ -454,7 +468,7 @@ public partial class FlowWindow : Window
     {
         n.Status = "running"; Refresh(n); Log("INFO", $"Running “{n.Name}”");
         bool ok = false;
-        if (n.Stub.Enabled)
+        if (n.Stub.Enabled || n.Kind == "StubService")
         {
             try
             {

@@ -25,12 +25,14 @@
     <Grid Grid.Row="1">
       <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
 
-      <StackPanel Background="{StaticResource Panel}" Margin="0">
-        <TextBlock Text="ADD NODE" Foreground="{StaticResource Mu}" FontSize="11" Margin="12,12,12,6"/>
-        <StackPanel x:Name="Palette" Margin="10,0"/>
-        <TextBlock Foreground="{StaticResource Mu}" FontSize="11" TextWrapping="Wrap" Margin="12,16"
-                   Text="Drag nodes to move. Click a right dot, then another node’s left dot, to connect. Click a node for settings. Right-click for delete / disconnect."/>
-      </StackPanel>
+      <ScrollViewer Background="{StaticResource Panel}" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0">
+          <TextBlock Text="ADD NODE" Foreground="{StaticResource Mu}" FontSize="11" Margin="12,12,12,6"/>
+          <StackPanel x:Name="Palette" Margin="10,0"/>
+          <TextBlock Foreground="{StaticResource Mu}" FontSize="11" TextWrapping="Wrap" Margin="12,16"
+                     Text="Drag nodes to move. Click a right dot, then another node’s left dot, to connect. Click a node for settings. Right-click for delete / disconnect."/>
+        </StackPanel>
+      </ScrollViewer>
 
       <Grid Grid.Column="1">
         <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="130"/></Grid.RowDefinitions>

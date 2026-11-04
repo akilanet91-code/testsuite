@@ -78,6 +78,31 @@ public static class ExcelIO
         return SheetGrid.ToRows(grid, headerRow).rows;   // report title lines above the header are skipped
     }
 
+    /// <summary>The whole sheet as rows of cell text, exactly as laid out (no header detection) - for specs that hold several tables (Header / Detail / Trailer).
+    /// Sheet not found: a blank name or "Mapping" takes the first sheet, any other name is an error that lists the sheets.</summary>
+    public static (List<string[]> grid, string sheet) ReadGrid(string path, string? sheet)
+    {
+        if (XlsReader.IsXls(path)) return XlsReader.ReadGrid(path, sheet);
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var wb = new XLWorkbook(fs);
+        var ws = string.IsNullOrWhiteSpace(sheet) ? null : wb.Worksheets.FirstOrDefault(w => w.Name.Equals(sheet.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (ws == null)
+        {
+            if (string.IsNullOrWhiteSpace(sheet) || sheet.Trim().Equals("Mapping", StringComparison.OrdinalIgnoreCase)) ws = wb.Worksheets.First();
+            else throw new InvalidDataException($"Sheet “{sheet}” not found in {Path.GetFileName(path)}. Sheets: {string.Join(", ", wb.Worksheets.Select(w => w.Name))}");
+        }
+        int maxR = ws.LastRowUsed()?.RowNumber() ?? 0, maxC = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+        if (maxR == 0) throw new InvalidDataException("Sheet is empty.");
+        var grid = new List<string[]>();
+        for (int r = 1; r <= maxR; r++)
+        {
+            var row = new string[maxC];
+            for (int c = 1; c <= maxC; c++) row[c - 1] = ws.Cell(r, c).GetFormattedString().Trim();
+            grid.Add(row);
+        }
+        return (grid, ws.Name);
+    }
+
     public static void SaveTemplate(string path)
     {
         using var wb = new XLWorkbook();
