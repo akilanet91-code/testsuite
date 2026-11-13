@@ -63,7 +63,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_DoesNotCallAnyInjectedDependency(OrderType type)
+        public void GetUTAccountNumber_DoesNotCallAnyInjectedDependency(string type)
         {
             var order = BuildOrder(type, "CASA", BuildPayment());
 
@@ -96,7 +96,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         // Only the branch matching orderType is populated, so tests also prove
         // the other branch is never touched.
-        private static UTOrder BuildOrder(OrderType type, string paymentMethod,
+        private static UTOrder BuildOrder(string type, string paymentMethod,
             UTOMSPayment payment, string investmentType = null)
         {
             var order = new UTOrder { OrderType = type, InvestmentType = investmentType };
@@ -113,11 +113,17 @@ namespace RIM.Core.OrderService.BL.SG.Tests
             yield return new object[] { OrderType.RIS };
         }
 
-        public static IEnumerable<object[]> UnsupportedOrderTypes() =>
-            Enum.GetValues(typeof(OrderType)).Cast<OrderType>()
-                .Where(t => t != OrderType.Subscription && t != OrderType.RIS)
-                .Append((OrderType)9999)
-                .Select(t => new object[] { t });
+        // OrderType is a static class of const strings, so "unsupported" means any other string.
+        public static IEnumerable<object[]> UnsupportedOrderTypes()
+        {
+            yield return new object[] { "UNKNOWN" };
+            yield return new object[] { "" };
+            yield return new object[] { " " };
+            yield return new object[] { null };
+            // near-misses of the supported constants must not match
+            yield return new object[] { OrderType.Subscription + "X" };
+            yield return new object[] { OrderType.RIS + "X" };
+        }
 
         // =====================================================================
         // GetUTAccountNumber
@@ -125,7 +131,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(UnsupportedOrderTypes))]
-        public void GetUTAccountNumber_UnsupportedOrderType_ReturnsEmptyString(OrderType type)
+        public void GetUTAccountNumber_UnsupportedOrderType_ReturnsEmptyString(string type)
         {
             var order = new UTOrder { OrderType = type };
 
@@ -136,7 +142,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CASA_ReturnsUOBDebitingAcNo(OrderType type)
+        public void GetUTAccountNumber_CASA_ReturnsUOBDebitingAcNo(string type)
         {
             var order = BuildOrder(type, "CASA", BuildPayment());
 
@@ -145,7 +151,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_SRS_ReturnsSrsAcNo(OrderType type)
+        public void GetUTAccountNumber_SRS_ReturnsSrsAcNo(string type)
         {
             var order = BuildOrder(type, "SRS", BuildPayment());
 
@@ -154,7 +160,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CPF_InvestmentTypeCPFOA_ReturnsCpfInvestmentAcNo(OrderType type)
+        public void GetUTAccountNumber_CPF_InvestmentTypeCPFOA_ReturnsCpfInvestmentAcNo(string type)
         {
             var order = BuildOrder(type, "CPF", BuildPayment(), "CPFOA");
 
@@ -163,7 +169,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CPF_InvestmentTypeCPFSA_ReturnsCpfAcNo(OrderType type)
+        public void GetUTAccountNumber_CPF_InvestmentTypeCPFSA_ReturnsCpfAcNo(string type)
         {
             var order = BuildOrder(type, "CPF", BuildPayment(), "CPFSA");
 
@@ -172,7 +178,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CPF_UnknownInvestmentType_FallsBackToInvestmentAcNo(OrderType type)
+        public void GetUTAccountNumber_CPF_UnknownInvestmentType_FallsBackToInvestmentAcNo(string type)
         {
             var order = BuildOrder(type, "CPF", BuildPayment(), "SOMETHING_ELSE");
 
@@ -181,7 +187,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CPF_NullInvestmentType_FallsBackToInvestmentAcNo(OrderType type)
+        public void GetUTAccountNumber_CPF_NullInvestmentType_FallsBackToInvestmentAcNo(string type)
         {
             var order = BuildOrder(type, "CPF", BuildPayment(), null);
 
@@ -190,7 +196,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CPF_InvestmentTypeIsCaseSensitive(OrderType type)
+        public void GetUTAccountNumber_CPF_InvestmentTypeIsCaseSensitive(string type)
         {
             // "cpfsa" does not match "CPFSA" so the default (OA) branch is used
             var order = BuildOrder(type, "CPF", BuildPayment(), "cpfsa");
@@ -200,7 +206,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CPF_NullCpfAccountValue_ReturnsNull(OrderType type)
+        public void GetUTAccountNumber_CPF_NullCpfAccountValue_ReturnsNull(string type)
         {
             var payment = BuildPayment();
             payment.CPFPayment.CPFInvestmentACNo = null;
@@ -211,7 +217,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CASA_NullAccountValue_ReturnsNull(OrderType type)
+        public void GetUTAccountNumber_CASA_NullAccountValue_ReturnsNull(string type)
         {
             var payment = BuildPayment();
             payment.CASAPayment.UOBDebitingACNo = null;
@@ -222,8 +228,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        [InlineData(null)]
-        public void GetUTAccountNumber_NullPaymentMethod_ReturnsNull(OrderType type)
+        public void GetUTAccountNumber_NullPaymentMethod_ReturnsNull(string type)
         {
             var order = BuildOrder(type, null, BuildPayment());
 
@@ -293,7 +298,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CASA_NullPaymentObject_Throws(OrderType type)
+        public void GetUTAccountNumber_CASA_NullPaymentObject_Throws(string type)
         {
             var order = BuildOrder(type, "CASA", null);
 
@@ -302,7 +307,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CASA_NullCasaPayment_Throws(OrderType type)
+        public void GetUTAccountNumber_CASA_NullCasaPayment_Throws(string type)
         {
             var payment = BuildPayment();
             payment.CASAPayment = null;
@@ -313,7 +318,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_SRS_NullSrsPayment_Throws(OrderType type)
+        public void GetUTAccountNumber_SRS_NullSrsPayment_Throws(string type)
         {
             var payment = BuildPayment();
             payment.SRSPayment = null;
@@ -324,7 +329,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CPF_NullCpfPayment_Throws(OrderType type)
+        public void GetUTAccountNumber_CPF_NullCpfPayment_Throws(string type)
         {
             var payment = BuildPayment();
             payment.CPFPayment = null;
@@ -335,7 +340,7 @@ namespace RIM.Core.OrderService.BL.SG.Tests
 
         [Theory]
         [MemberData(nameof(SupportedOrderTypes))]
-        public void GetUTAccountNumber_CASA_DoesNotTouchOtherPaymentTypes(OrderType type)
+        public void GetUTAccountNumber_CASA_DoesNotTouchOtherPaymentTypes(string type)
         {
             // SRS and CPF payments are null; CASA path must not access them
             var payment = new UTOMSPayment { CASAPayment = new() { UOBDebitingACNo = CasaAcc } };
